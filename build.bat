@@ -245,6 +245,18 @@ mklink /J build\src\plugins\nvidia plugins\nvidia
 echo Plugin linked to build\src\plugins\nvidia\
 
 REM =============================================================================
+REM Patch dependencies
+REM =============================================================================
+
+echo.
+echo Applying dependency patches...
+python scripts\patch_deps.py
+if errorlevel 1 (
+    echo ERROR: Dependency patching failed
+    exit /b 1
+)
+
+REM =============================================================================
 REM Configure CMake
 REM =============================================================================
 
@@ -253,7 +265,7 @@ echo Configuring CMake (%BUILD_TYPE% build^)...
 
 REM CMAKE_ENABLE_EXPORTS=ON - Enable symbol exports from the LOVR executable
 REM LOVR_BUILD_WITH_SYMBOLS=ON - Export all symbols (not just the subset normally marked for export)
-cmake -B build -S build\src -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_ENABLE_EXPORTS=ON -DLOVR_BUILD_WITH_SYMBOLS=ON -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON %CMAKE_EXTRA_ARGS%
+cmake -B build -S build\src -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_ENABLE_EXPORTS=ON -DLOVR_BUILD_WITH_SYMBOLS=ON -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=OFF %CMAKE_EXTRA_ARGS%
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
