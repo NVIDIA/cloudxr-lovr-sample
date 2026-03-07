@@ -72,6 +72,29 @@ if not exist "%EXAMPLE_PATH%" (
     exit /b 1
 )
 
+REM Open firewall ports scoped to lovr.exe (only if rules are not already present).
+REM Elevates via UAC if not already running as Administrator.
+set PS_ARGS=-ExecutionPolicy Bypass -File "%~dp0scripts\open_firewall_ports.ps1" -ExePath "%CD%\%LOVR_BIN%"
+powershell -Command "$u = Get-NetFirewallRule -DisplayName 'CloudXR Server (UDP 47998,47999,48000,48002,48005)' -ErrorAction SilentlyContinue; $t = Get-NetFirewallRule -DisplayName 'CloudXR Server (TCP 48010,49100)' -ErrorAction SilentlyContinue; if ($u -and $t) { exit 0 } else { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+    echo Firewall rules already configured, skipping.
+) else (
+    echo Configuring firewall rules for CloudXR...
+    net session >nul 2>&1
+    if errorlevel 1 (
+        REM Not admin - launch an elevated PowerShell and wait for it to finish.
+        powershell -Command "Start-Process powershell -ArgumentList '%PS_ARGS%' -Verb RunAs -Wait"
+    ) else (
+        REM Already admin - run directly.
+        powershell %PS_ARGS%
+    )
+    if errorlevel 1 (
+        echo WARNING: Firewall rule setup failed. Ports may need to be opened manually:
+        echo          UDP 47998 47999 48000 48002 48005 / TCP 48010 49100
+    )
+)
+echo.
+
 REM Run
 echo ========================================
 echo Running CloudXR LOVR Example
