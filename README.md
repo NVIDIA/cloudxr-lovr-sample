@@ -27,7 +27,7 @@ Before you begin, ensure you have:
 - **CloudXR™ SDK**: Visit [cloudxr-sdk](https://catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk) to download the CloudXR™ Runtime libraries and client software
 - **Supported Headset**: 
   - **Apple Vision Pro** (fully supported)
-  - **Meta Quest 3** (Early Access - requires separate application approval)
+  - **Meta Quest 2/3/3S** (via [CloudXR.js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html))
 - **GPU**: NVIDIA GPU (recommended: NVIDIA RTX 6000 Ada)
 - **Platform**: Windows or Linux (macOS not supported by CloudXR™)
 - **Network**: High-speed WiFi connection (WiFi 6 recommended for best experience)
@@ -58,14 +58,15 @@ After obtaining CloudXR™ SDK access, download the CloudXR™ SDK archives for 
 This repository provides automated build scripts that fetch LÖVR and integrate the plugin:
 
 ```bash
-# Linux - builds with upstream LOVR
+# Linux - builds with pinned LOVR commit
 ./build.sh
 
 # Windows (Note: keyboard should be set to US English, and terminal should NOT be run as administrator)
 .\build.bat
 
-# Or use a custom LOVR repository/branch
+# Or use a custom LOVR repository/branch or commit
 ./build.sh --lovr-repo <url> --lovr-branch <branch>
+./build.sh --lovr-repo <url> --lovr-commit <commit>
 ```
 
 The build script will:
@@ -79,14 +80,20 @@ The build script will:
 
 Options:
   --lovr-repo <url>       Custom LOVR repository
-  --lovr-branch <branch>  Custom branch/tag
+  --lovr-branch <branch>  Use a branch or tag (clears pinned commit)
+  --lovr-commit <hash>    Use a specific commit (clears branch)
   Debug|Release           Build type (default: Debug)
   clean                   Clean build outputs
   cleanall                Clean everything including source
 
+By default, the build scripts clone LOVR and check out a pinned commit
+(7d47902f594334b9709bfd819cd20514addefbaf). Pass --lovr-branch or
+--lovr-commit to override; specifying both is not supported (last one wins).
+
 Examples:
-  ./build.sh Release              # Release build
-  ./build.sh cleanall && ./build.sh  # Clean rebuild
+  ./build.sh Release                    # Release build with pinned commit
+  ./build.sh --lovr-branch dev          # Build from LOVR dev branch
+  ./build.sh cleanall && ./build.sh     # Clean rebuild
 ```
 
 **What gets built:**
@@ -117,7 +124,7 @@ The included example automatically configures everything for you:
 # Windows
 run.bat
 
-# Quest 3 (Early Access)
+# Meta Quest (via CloudXR.js)
 ./run.sh --webrtc
 run.bat --webrtc
 ```
@@ -315,24 +322,26 @@ In this example, we simply echo back the data the client sends, but data can be 
 nv_cxr.destroyRuntime()
 ```
 
-## Quest 3 Early Access
+## Meta Quest Support (CloudXR.js)
 
-CloudXR™ supports **Meta Quest 3** under Early Access. While Apple Vision Pro is fully supported, Quest 3 requires separate application approval.
+CloudXR™ supports **Meta Quest 2/3/3S** headsets through [CloudXR.js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html), which is generally available as of CloudXR 6.1.0. CloudXR.js enables streaming from any OpenXR-compatible server application (including this LÖVR plugin) to web-based headset clients over WebRTC.
 
-**To apply for Early Access:**
-1. Visit [developer.nvidia.com/cloudxr-sdk-early-access-program](https://developer.nvidia.com/cloudxr-sdk-early-access-program)
-2. Complete the application form
-3. Contact your NVIDIA Advisor if you have one
+**Download CloudXR.js:** [NVIDIA NGC - CloudXR.js](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js)
 
-**Running with Quest 3**
+**Running with Meta Quest:**
 
-Once accepted and configured, you can specify the device profile when starting the runtime:
+Use the `--webrtc` flag to configure the runtime with the `auto-webrtc` device profile:
 
 ```bash
-# Use the --webrtc  flag
 ./run.sh --webrtc
 run.bat --webrtc
 ```
+
+**Connection modes:**
+- **HTTP mode**: Simplest setup for local development. Direct WebSocket connection to CloudXR™ Runtime. Requires browser flag on Quest to allow insecure origins.
+- **HTTPS mode**: Required for production deployments. Requires a WebSocket SSL proxy (HAProxy, nginx, etc.).
+
+For full setup instructions, including client configuration, WebSocket proxy setup, and network requirements, refer to the [CloudXR.js documentation](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html).
 
 ## Troubleshooting
 
@@ -429,6 +438,9 @@ MIT, see [`LICENSE`](LICENSE) for details.
 
 - **CloudXR Documentation**: [docs.nvidia.com/cloudxr-sdk](https://docs.nvidia.com/cloudxr-sdk/)
 - **CloudXR SDK**: [catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk](https://catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk)
+- **CloudXR Runtime Download**: [catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-runtime](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-runtime)
+- **CloudXR.js Documentation**: [docs.nvidia.com/cloudxr-sdk/.../cloudxr_js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html)
+- **CloudXR.js Download**: [catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js)
 - **LÖVR (upstream)**: [github.com/bjornbytes/lovr](https://github.com/bjornbytes/lovr)
 - **LÖVR Docs**: [lovr.org/docs](https://lovr.org/docs)
 
