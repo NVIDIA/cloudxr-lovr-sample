@@ -10,7 +10,8 @@
 #   ./build.sh Release                              - Build in Release mode
 #   ./build.sh clean                                - Clean everything
 #   ./build.sh cleanall                             - Clean including src/
-#   ./build.sh --lovr-repo <url> --lovr-branch <branch>  - Use custom LOVR
+#   ./build.sh --lovr-repo <url> --lovr-branch <branch>  - Use custom LOVR branch
+#   ./build.sh --lovr-repo <url> --lovr-commit <commit>  - Use custom LOVR commit
 # =============================================================================
 
 set -e  # Exit on error
@@ -25,7 +26,8 @@ NC='\033[0m' # No Color
 # Default values
 BUILD_TYPE="Debug"
 LOVR_REPO="https://github.com/bjornbytes/lovr.git"
-LOVR_BRANCH="dev"
+LOVR_COMMIT="7d47902f594334b9709bfd819cd20514addefbaf"
+LOVR_BRANCH=""
 CMAKE_EXTRA_ARGS=""
 
 # Parse arguments
@@ -51,6 +53,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --lovr-branch)
             LOVR_BRANCH="$2"
+            LOVR_COMMIT=""
+            shift 2
+            ;;
+        --lovr-commit)
+            LOVR_COMMIT="$2"
+            LOVR_BRANCH=""
             shift 2
             ;;
         Debug|Release|RelWithDebInfo|MinSizeRel)
@@ -68,7 +76,11 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}CloudXR LOVR Build Script${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}LOVR Repository: ${LOVR_REPO}${NC}"
-echo -e "${BLUE}LOVR Branch: ${LOVR_BRANCH}${NC}"
+if [ -n "${LOVR_BRANCH}" ]; then
+    echo -e "${BLUE}LOVR Branch: ${LOVR_BRANCH}${NC}"
+else
+    echo -e "${BLUE}LOVR Commit: ${LOVR_COMMIT}${NC}"
+fi
 echo -e "${BLUE}Build Type: ${BUILD_TYPE}${NC}"
 echo -e "${BLUE}========================================${NC}"
 
@@ -167,16 +179,47 @@ echo -e "${GREEN}✓ CloudXR SDK libraries found${NC}"
 
 if [ ! -d "build/src" ]; then
     echo -e "\n${BLUE}Fetching LOVR...${NC}"
-    echo -e "${YELLOW}Cloning from: ${LOVR_REPO} (${LOVR_BRANCH})${NC}"
     mkdir -p build
-    git clone --depth 1 --branch "${LOVR_BRANCH}" --recurse-submodules "${LOVR_REPO}" build/src
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Failed to clone LOVR${NC}"
-        exit 1
+    if [ -n "${LOVR_BRANCH}" ]; then
+        echo -e "${YELLOW}Cloning from: ${LOVR_REPO} (branch ${LOVR_BRANCH})${NC}"
+        git clone --depth 1 --branch "${LOVR_BRANCH}" --recurse-submodules "${LOVR_REPO}" build/src
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to clone LOVR${NC}"
+            exit 1
+        fi
+
+        echo -e "${GREEN}✓ LOVR cloned successfully with submodules${NC}"
+    else
+        echo -e "${YELLOW}Cloning from: ${LOVR_REPO} (commit ${LOVR_COMMIT})${NC}"
+        git clone "${LOVR_REPO}" build/src
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to clone LOVR${NC}"
+            exit 1
+        fi
+
+        echo -e "${YELLOW}Checking out commit ${LOVR_COMMIT}...${NC}"
+        cd build/src
+        git checkout "${LOVR_COMMIT}"
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to checkout commit ${LOVR_COMMIT}${NC}"
+            cd ../..
+            exit 1
+        fi
+
+        git submodule update --init --recursive
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to initialize submodules${NC}"
+            cd ../..
+            exit 1
+        fi
+
+        cd ../..
+        echo -e "${GREEN}✓ LOVR cloned and checked out successfully with submodules${NC}"
     fi
-    
-    echo -e "${GREEN}✓ LOVR cloned successfully with submodules${NC}"
 else
     echo -e "\n${BLUE}Using existing LOVR in build/src/${NC}"
     echo -e "${YELLOW}Updating submodules...${NC}"

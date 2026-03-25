@@ -10,7 +10,8 @@ REM   build.bat                                      - Build with default LOVR
 REM   build.bat Release                              - Build in Release mode
 REM   build.bat clean                                - Clean build directory
 REM   build.bat cleanall                             - Clean build and src
-REM   build.bat --lovr-repo <url> --lovr-branch <branch>  - Use custom LOVR
+REM   build.bat --lovr-repo <url> --lovr-branch <branch>  - Use custom LOVR branch
+REM   build.bat --lovr-repo <url> --lovr-commit <commit>  - Use custom LOVR commit
 REM =============================================================================
 
 setlocal enabledelayedexpansion
@@ -18,7 +19,8 @@ setlocal enabledelayedexpansion
 REM Default values
 set BUILD_TYPE=Debug
 set LOVR_REPO=https://github.com/bjornbytes/lovr.git
-set LOVR_BRANCH=dev
+set LOVR_COMMIT=7d47902f594334b9709bfd819cd20514addefbaf
+set LOVR_BRANCH=
 set CMAKE_EXTRA_ARGS=
 
 REM Parse arguments
@@ -57,6 +59,15 @@ if "%~1"=="--lovr-repo" (
 
 if "%~1"=="--lovr-branch" (
     set LOVR_BRANCH=%~2
+    set LOVR_COMMIT=
+    shift
+    shift
+    goto parse_args
+)
+
+if "%~1"=="--lovr-commit" (
+    set LOVR_COMMIT=%~2
+    set LOVR_BRANCH=
     shift
     shift
     goto parse_args
@@ -97,7 +108,11 @@ echo ========================================
 echo CloudXR LOVR Build Script
 echo ========================================
 echo LOVR Repository: %LOVR_REPO%
-echo LOVR Branch: %LOVR_BRANCH%
+if not "%LOVR_BRANCH%"=="" (
+    echo LOVR Branch: %LOVR_BRANCH%
+) else (
+    echo LOVR Commit: %LOVR_COMMIT%
+)
 echo Build Type: %BUILD_TYPE%
 echo ========================================
 
@@ -214,16 +229,47 @@ REM ============================================================================
 if not exist "build\src" (
     echo.
     echo Fetching LOVR...
-    echo Cloning from: %LOVR_REPO% (%LOVR_BRANCH%^)
     if not exist build mkdir build
-    git clone --depth 1 --branch %LOVR_BRANCH% --recurse-submodules %LOVR_REPO% build\src
-    
-    if errorlevel 1 (
-        echo ERROR: Failed to clone LOVR
-        exit /b 1
+    if not "!LOVR_BRANCH!"=="" (
+        echo Cloning from: %LOVR_REPO% (branch !LOVR_BRANCH!^)
+        git clone --depth 1 --branch "!LOVR_BRANCH!" --recurse-submodules %LOVR_REPO% build\src
+
+        if errorlevel 1 (
+            echo ERROR: Failed to clone LOVR
+            exit /b 1
+        )
+
+        echo LOVR cloned successfully with submodules
+    ) else (
+        echo Cloning from: %LOVR_REPO% (commit %LOVR_COMMIT%^)
+        git clone %LOVR_REPO% build\src
+
+        if errorlevel 1 (
+            echo ERROR: Failed to clone LOVR
+            exit /b 1
+        )
+
+        echo Checking out commit %LOVR_COMMIT%...
+        cd build\src
+        git checkout %LOVR_COMMIT%
+
+        if errorlevel 1 (
+            echo ERROR: Failed to checkout commit %LOVR_COMMIT%
+            cd ..\..
+            exit /b 1
+        )
+
+        git submodule update --init --recursive
+
+        if errorlevel 1 (
+            echo ERROR: Failed to initialize submodules
+            cd ..\..
+            exit /b 1
+        )
+
+        cd ..\..
+        echo LOVR cloned and checked out successfully with submodules
     )
-    
-    echo LOVR cloned successfully with submodules
 ) else (
     echo.
     echo Using existing LOVR in build\src\
