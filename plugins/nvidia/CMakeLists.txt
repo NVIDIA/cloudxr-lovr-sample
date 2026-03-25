@@ -66,16 +66,13 @@ else()
     # Note: We don't set RPATH here to avoid overriding the main executable's RPATH
     # The main executable will handle library loading with relative paths
     
-    # Copy all CloudXR libraries to the main output directory and fix their RPATH
+    # Copy all CloudXR libraries to the main output directory
+    # The SDK libraries already ship with correct $ORIGIN RPATH, and cp -a preserves it
     add_custom_command(TARGET nvidia POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Copying CloudXR Linux libraries preserving symlinks..."
-        # Call cp directly (not through bash -c) to preserve symlinks  
+        # Call cp directly (not through bash -c) to preserve symlinks and RPATH
         COMMAND cp -a ${CLOUDXR_LIB_PATH}/. ${CMAKE_BINARY_DIR}/bin/
         COMMAND ${CMAKE_COMMAND} -E echo "All CloudXR Linux libraries copied successfully"
-        COMMAND ${CMAKE_COMMAND} -E echo "Fixing RPATH for CloudXR libraries..."
-        # Call find directly - Make runs commands through shell, so || works fine
-        COMMAND find ${CMAKE_BINARY_DIR}/bin -name "\"*.so*\"" -type f -exec chrpath -r "\"$$ORIGIN\"" {} "\\;" 2>/dev/null || true
-        COMMAND ${CMAKE_COMMAND} -E echo "RPATH fix completed"
     )
     
     # Copy the nvidia plugin to the main output directory with correct name and fix RPATH
