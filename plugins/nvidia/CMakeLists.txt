@@ -27,6 +27,8 @@ add_library(nvidia SHARED
 # Set the plugin target property for the main CMakeLists.txt to discover
 set_property(DIRECTORY PROPERTY LOVR_PLUGIN_TARGETS nvidia)
 
+set_target_properties(nvidia PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+
 # Set include directories - the main project will handle additional includes
 target_include_directories(nvidia PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -52,6 +54,12 @@ if(WIN32)
     target_compile_definitions(nvidia PRIVATE _WIN32)
     # Ensure we're importing, not exporting global variables
     target_compile_definitions(nvidia PRIVATE LOVR_API_IMPORT)
+    if(MSVC)
+        target_compile_options(nvidia PRIVATE /experimental:c11atomics)
+        # Export all symbols from lovr.exe so the plugin can link against them.
+        # lovr has no precompiled headers, so there is no PCH symbol conflict.
+        set_target_properties(lovr PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
     # Copy all CloudXR runtime DLLs to output directory
     add_custom_command(TARGET nvidia POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Copying CloudXR runtime DLLs..."

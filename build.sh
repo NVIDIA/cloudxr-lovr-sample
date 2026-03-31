@@ -239,6 +239,13 @@ ln -s "$(pwd)/plugins/nvidia" build/src/plugins/nvidia
 echo -e "${GREEN}✓ Plugin linked to build/src/plugins/nvidia/${NC}"
 
 # =============================================================================
+# Patch dependencies
+# =============================================================================
+
+echo -e "\n${BLUE}Applying dependency patches...${NC}"
+python3 scripts/patch_deps.py
+
+# =============================================================================
 # Configure CMake
 # =============================================================================
 
@@ -246,7 +253,7 @@ echo -e "\n${BLUE}Configuring CMake (${BUILD_TYPE} build)...${NC}"
 
 # CMAKE_ENABLE_EXPORTS=ON - Enable symbol exports from the LOVR executable
 # LOVR_BUILD_WITH_SYMBOLS=ON - Export all symbols (not just the subset normally marked for export)
-cmake -B build -S build/src -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DCMAKE_ENABLE_EXPORTS=ON -DLOVR_BUILD_WITH_SYMBOLS=ON $CMAKE_EXTRA_ARGS
+cmake -B build -S build/src -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DCMAKE_ENABLE_EXPORTS=ON -DLOVR_BUILD_WITH_SYMBOLS=ON -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=OFF $CMAKE_EXTRA_ARGS
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ CMake configuration failed${NC}"
