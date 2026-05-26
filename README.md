@@ -1,195 +1,125 @@
 # NVIDIA CloudXR™ LÖVR Plugin
 
-NVIDIA CloudXR™ provides seamless, high-fidelity XR streaming over any network. This plugin integrates CloudXR™ Runtime into LÖVR, a tiny, fast, open-source framework supporting multiple platforms and devices. Use this as a reference for integrating CloudXR™ into your own OpenXR applications.
+NVIDIA CloudXR™ provides seamless, high-fidelity XR streaming over any network. This plugin integrates the CloudXR™ Runtime into LÖVR, a tiny, fast, open-source framework for OpenXR applications. Use it as a reference for integrating CloudXR™ into your own OpenXR apps.
 
-## What is CloudXR™?
+- **CloudXR™** streams VR/AR rendering from a workstation or the cloud to the headset over the network instead of rendering on the headset.
+- **LÖVR** is an open-source XR engine built on OpenXR with Lua as the scripting language.
 
-**CloudXR™** is NVIDIA's technology for streaming VR/AR applications over the network. Instead of rendering directly on the headset, your application runs on a workstation or in the cloud and streams the rendered frames through CloudXR™ to the headset over any network.
+This plugin gives a LÖVR app three things:
 
-**LÖVR** is an open-source VR framework built on OpenXR. Think of it as an engine specifically designed for XR applications, with Lua as the scripting language.
+1. **Runtime management** — automatically loads and configures the CloudXR™ service that handles wireless streaming.
+2. **Opaque data channels** — optional bidirectional custom messaging between the app and the headset (app state, sensor data, etc.).
+3. **Audio streaming (Windows only)** — server-to-headset audio streaming.
 
-## What This Plugin Does
+> **Key point:** CloudXR™ replaces the standard OpenXR runtime. It intercepts OpenXR calls and streams the rendered frames to a connected headset.
 
-This plugin provides three main capabilities:
+---
 
-1. **Runtime Management**: Automatically loads and configures the CloudXR™ service that handles wireless streaming
-2. **Opaque Data Channels**: Optionally enable custom bidirectional communication between your LÖVR app and the headset for things like:
-   - Sending application state updates
-   - Receiving custom application data. Headset sensor data is automatically sent from headset clients
-3. **Audio Streaming (Windows only)**: Supports streaming audio from server to headset on Windows platforms
+## Quick Start (novice users)
 
-**Key Point**: CloudXR™ replaces your standard OpenXR runtime, intercepting OpenXR calls and streaming the rendered frames to connected headsets over the network.
+This is the fast path. Follow it once and you'll have the sample running. For everything else (custom LÖVR commits, alternate device profiles, custom CloudXR.js builds, etc.) see [Advanced Configuration](#advanced-configuration).
 
-## Prerequisites
+### Prerequisites
 
-Before you begin, ensure you have:
+- **OS**: Windows or Linux (macOS is not supported by CloudXR™).
+- **GPU**: NVIDIA GPU (NVIDIA RTX 6000 Ada recommended).
+- **Headset**: Apple Vision Pro (uses native CloudXR™ client), or Meta Quest 2/3/3S / PICO 4 Ultra (use [CloudXR.js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html) in the headset browser). PICO 4 Ultra requires HTTPS and needs you to bring your own CloudXR.js server — see [CloudXR.js configuration](#cloudxrjs-configuration).
+- **Network**: High-speed Wi-Fi (Wi-Fi 6 recommended), with the headset and workstation on the same network.
+- **Build tools**: CMake 3.10+, C/C++ compiler, `git`, `curl`.
+- **Node.js v20.19.0 or later with npm** — automatically used by the build to set up the CloudXR.js sample. Install it manually first if your system doesn't have it, or pass `--without-cloudxrjs` to skip the CloudXR.js sample setup entirely.
 
-- **CloudXR™ SDK**: Visit [cloudxr-sdk](https://catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk) to download the CloudXR™ Runtime libraries and client software
-- **Supported Headset**: 
-  - **Apple Vision Pro** (fully supported)
-  - **Meta Quest 2/3/3S** (via [CloudXR.js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html))
-- **GPU**: NVIDIA GPU (recommended: NVIDIA RTX 6000 Ada)
-- **Platform**: Windows or Linux (macOS not supported by CloudXR™)
-- **Network**: High-speed WiFi connection (WiFi 6 recommended for best experience)
-- **Build Tools**: CMake 3.10+, C compiler, git
+The build scripts download the CloudXR™ Runtime SDK and CloudXR.js package from NVIDIA NGC the first time they run. To use specific versions, see [Use a specific CloudXR Runtime / CloudXR.js version](#use-a-specific-cloudxr-runtime--cloudxrjs-version).
 
-
-## Building & Running
-
-### Step 1: Download CloudXR™ Runtime Libraries
-
-After obtaining CloudXR™ SDK access, download the CloudXR™ SDK archives for your platform and copy them to the root of the repository:
-
-- **Linux**: Copy the Linux CloudXR SDK archive (e.g., `CloudXR-*-Linux-sdk.tar.gz`) to the repo root
-- **Windows**: Copy the Windows CloudXR SDK archive (e.g., `CloudXR-*-Win64-sdk.zip`) to the repo root
-
-**For convenience, the build scripts (`build.sh` for Linux, `build.bat` for Windows) will automatically:**
-- Unpack the CloudXR SDK archives
-- Copy libraries to `plugins/nvidia/lib/linux-x86_64/` or `plugins/nvidia/lib/windows-x86_64/`
-- Copy header files to `plugins/nvidia/include/`
-- Set up all required dependencies and runtime manifests
-
-**Headset Client Software:** Download the CloudXR™ client for your headset from the CloudXR™ SDK package. For Apple Vision Pro, follow the installation instructions included with the SDK.
-
-**Network Configuration:** For detailed networking requirements, including firewall configuration and port information, please refer to the [NVIDIA CloudXR™ SDK Documentation](https://docs.nvidia.com/cloudxr-sdk). This resource provides comprehensive guidance on network setup to ensure optimal streaming performance.
-
-### Step 2: Build LÖVR with Plugin
-
-This repository provides automated build scripts that fetch LÖVR and integrate the plugin:
-
-```bash
-# Linux - builds with pinned LOVR commit
-./build.sh
-
-# Windows (Note: keyboard should be set to US English, and terminal should NOT be run as administrator)
-.\build.bat
-
-# Or use a custom LOVR repository/branch or commit
-./build.sh --lovr-repo <url> --lovr-branch <branch>
-./build.sh --lovr-repo <url> --lovr-commit <commit>
-```
-
-The build script will:
-- Clone LÖVR to `build/src/` with submodules
-- Copy the CloudXR plugin into `build/src/plugins/`
-- Build everything together
-
-**Build options:**
-```bash
-./build.sh [options]
-
-Options:
-  --lovr-repo <url>       Custom LOVR repository
-  --lovr-branch <branch>  Use a branch or tag (clears pinned commit)
-  --lovr-commit <hash>    Use a specific commit (clears branch)
-  Debug|Release           Build type (default: Debug)
-  clean                   Clean build outputs
-  cleanall                Clean everything including source
-
-By default, the build scripts clone LOVR and check out a pinned commit
-(7d47902f594334b9709bfd819cd20514addefbaf). Pass --lovr-branch or
---lovr-commit to override; specifying both is not supported (last one wins).
-
-Examples:
-  ./build.sh Release                    # Release build with pinned commit
-  ./build.sh --lovr-branch dev          # Build from LOVR dev branch
-  ./build.sh cleanall && ./build.sh     # Clean rebuild
-```
-
-**What gets built:**
-- `nvidia.dll` (Windows) or `nvidia.so` (Linux) - The CloudXR™ plugin
-- CloudXR™ runtime libraries automatically copied to output directory
-- Example applications ready to run
-
-**Directory structure after build:**
-```
-cloudxr-lovr-plugin-sample/
-├── plugins/nvidia/           # Plugin source
-├── build/
-│   ├── src/                  # LOVR with plugin integrated
-│   │   └── plugins/nvidia/   # Plugin copied here
-│   ├── Debug/                # Windows Debug build
-│   ├── Release/              # Windows Release build
-│   └── bin/                  # Linux build
-```
-
-### Step 3: Run the Example
-
-The included example automatically configures everything for you:
+### Apple Vision Pro
 
 ```bash
 # Linux
-./run.sh
+./build.sh && ./run.sh
 
-# Windows
-run.bat
-
-# Meta Quest (via CloudXR.js)
-./run.sh --webrtc
-run.bat --webrtc
+# Windows (US English keyboard, terminal NOT run as admin)
+.\build.bat && .\run.bat
 ```
 
-**What happens automatically:**
-- Sets `XR_RUNTIME_JSON` to point to CloudXR™ runtime json
-- Loads CloudXR™ service before OpenXR initialization
-- Configures the environment for wireless streaming
+Then launch the native CloudXR™ client on Apple Vision Pro and connect to your workstation.
 
-### Step 4: Verify It's Working
+### Meta Quest 2/3/3S (CloudXR.js over WebRTC)
 
-When running successfully, you should see output like this:
+```bash
+# Linux
+./build.sh && ./run.sh --device-profile=auto-webrtc
 
+# Windows (US English keyboard, terminal NOT run as admin)
+.\build.bat && .\run.bat --device-profile=auto-webrtc
 ```
+
+> **PICO 4 Ultra users:** skip the steps below — the PICO browser doesn't accept the insecure-origin workaround used here, so it requires HTTPS. Bring your own HTTPS CloudXR.js server and pass `--without-cloudxrjs`; see the **HTTPS mode** bullet in [CloudXR.js configuration](#cloudxrjs-configuration).
+
+`run.sh`/`run.bat` automatically starts the CloudXR.js dev server on port 8080 when `--device-profile=auto-webrtc` is used. Then on the Quest:
+
+1. Open the Meta Quest browser and navigate to `http://<your-workstation-ip>:8080/`.
+2. **Configure the browser to allow insecure origins** so the page can use the WebXR API over HTTP. See [the CloudXR.js client setup guide](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html#meta-quest-configuration) for the exact `chrome://flags/unsafely-treat-insecure-origin-as-secure` steps.
+3. Press **Connect** in the page to start streaming.
+
+> **Note:** The dev server runs over HTTP for the simplest local setup. For HTTPS, an existing CloudXR.js server on port 8080, or `--without-cloudxrjs`, see [CloudXR.js configuration](#cloudxrjs-configuration).
+
+### Verify it's working
+
+A successful launch ends with these key messages (with other lines interleaved):
+
+```text
 NVIDIA CloudXR Plugin Example
 Loading CloudXR manager...
+
 Loading NVIDIA CloudXR Runtime plugin...
 NVIDIA CloudXR plugin loaded successfully
-...
+ INFO [logServiceInfo] Created CloudXR™ Service
+	version: <RUNTIME VETRSION>
+	tag: <RUNTIME VETRSION>
+    ...
+	uses: Monado™
 NVIDIA CloudXR plugin initialized
-CloudXR Library API Version: 1.0.6
-CloudXR Runtime Version: 6.0.1
+CloudXR Library API Version: <API VERSION>
+CloudXR Runtime Version: <RUNTIME VETRSION>
+CloudXR device profile:	<DEVICE PROFILE>
 ...
-CloudXR service started successfully
 CloudXR Runtime initialized successfully
-OpenXR extension procedures loaded successfully
-Opaque data channel created: 0x013094f95000
-Opaque data channel created successfully
+
 ```
 
-**Next step:** Launch the CloudXR™ client on your compatible VR headset and connect to your workstation's IP address.
+If the headset doesn't connect, jump to [Troubleshooting](#troubleshooting).
+
+---
 
 ## How It Works
 
-### Understanding the Architecture
+### Architecture
 
-CloudXR™ works by replacing your standard OpenXR runtime with a custom one that streams content over the network. Here's what happens:
+CloudXR™ replaces the standard OpenXR runtime with a custom one that streams content over the network:
 
-1. **Your LÖVR app** renders VR content normally using OpenXR
-2. **CloudXR™ Runtime** intercepts OpenXR calls and captures the rendered frames
-3. **Network streaming** sends compressed frames to your headset
-4. **Headset client** receives and displays the streamed content
-5. **Headset client** sends poses and input back to CloudXR™ Runtime, which forwards them to your OpenXR app
+1. **Your LÖVR app** renders VR content normally using OpenXR.
+2. **CloudXR™ Runtime** intercepts OpenXR calls and captures the rendered frames.
+3. **Network streaming** sends compressed frames to the headset.
+4. **Headset client** receives and displays the streamed content.
+5. **Headset client** sends poses and input back, which CloudXR™ Runtime forwards to the OpenXR app.
 
-### Key Components
+### Key components
 
-**Two main libraries handle everything:**
+| Library (Windows / Linux) | Purpose | What it does |
+|---|---|---|
+| `cloudxr.dll` / `libcloudxr.so` | Service management | Starts/stops the CloudXR™ service, handles configuration |
+| `openxr_cloudxr.dll` / `libopenxr_cloudxr.so` | OpenXR interception | Replaces the standard OpenXR runtime, streams frames to the headset |
 
-| Library (Windows/Linux) | Purpose | What it does |
-|---------|---------|--------------|
-| `cloudxr.dll`/`libcloudxr.so` | Service Management | Starts/stops the CloudXR™ service, handles configuration |
-| `openxr_cloudxr.dll`/`libopenxr_cloudxr.so` | OpenXR Interception | Replaces standard OpenXR runtime, streams frames to headset |
+### Integration outline
 
-### Integration Steps
+For developers integrating CloudXR™ into their own OpenXR application:
 
-**For experienced developers integrating CloudXR™ into their own applications:**
+1. **Set `XR_RUNTIME_JSON`** to the CloudXR™ runtime manifest.
+2. **Load the CloudXR™ service library** and resolve function pointers from `cxrServiceAPI.h`. See `nvidia_cloudxr_runtime.c` for an example.
+3. **Start the service**: Create → Configure → Start the CloudXR™ service.
+4. **Initialize OpenXR.** OpenXR calls are now intercepted and streamed.
 
-1. **Set up OpenXR Loader**: Point `XR_RUNTIME_JSON` to CloudXR™ runtime json
-2. **Load CloudXR™ service library**: Get function pointers from `cxrServiceAPI.h`. See `nvidia_cloudxr_runtime.c` for an example of loading the process addresses.
-3. **Start service**: Create → Configure → Start the CloudXR™ service
-4. **Initialize OpenXR**: Now OpenXR calls will be intercepted and streamed
+> **Critical:** the CloudXR™ service must start **before** any OpenXR calls, or initialization will fail.
 
-**⚠️ Critical**: CloudXR™ service must start BEFORE any OpenXR calls, or initialization will fail.
-
-**Example sequence:**
 ```c
 // 1. Load library and get function pointers
 // 2. Create service
@@ -204,246 +134,405 @@ nv_cxr_service_start(service);
 // 5. Now safe to call OpenXR functions
 ```
 
-
 ### Opaque Data Channels
 
-**Opaque Data Channels** enable custom bidirectional communication between your LÖVR app and the headset. Think of it as a custom messaging system that works alongside the video stream.
+Opaque Data Channels enable custom bidirectional communication between the app and the headset alongside the video stream.
 
-**How it works:**
-1. **Request extension**: Add `XR_NV_OPAQUE_DATA_CHANNEL_EXTENSION_NAME` to your OpenXR extensions
-2. **Get function pointers**: Use `xrGetInstanceProcAddr` to get CloudXR™-specific functions from `XR_NV_opaque_data_channel.h`. See `cxrOpaqueDataChannelInit` as an example.
-3. **Create channel**: Call `xrCreateOpaqueDataChannelNV` with a unique 16-byte UUID
-4. **Wait for connection**: Poll `xrGetOpaqueDataChannelStateNV` until status is `CONNECTED`
-5. **Send data**: Use `xrSendOpaqueDataChannelNV` to send bytes to the headset
-6. **Receive data**: Poll `xrReceiveOpaqueDataChannelNV` to get data from the headset. See `cxrOpaqueDataChannelReceive` for implementation details.
-7. **Cleanup**: Call `xrShutdownOpaqueDataChannelNV` when done
+1. **Request the extension**: add `XR_NV_OPAQUE_DATA_CHANNEL_EXTENSION_NAME` to your OpenXR extensions.
+2. **Get function pointers**: use `xrGetInstanceProcAddr` to resolve the CloudXR™ functions from `XR_NV_opaque_data_channel.h` (see `cxrOpaqueDataChannelInit`).
+3. **Create a channel** with `xrCreateOpaqueDataChannelNV` and a unique 16-byte UUID.
+4. **Wait for connection**: poll `xrGetOpaqueDataChannelStateNV` until status is `CONNECTED`.
+5. **Send/receive** with `xrSendOpaqueDataChannelNV` / `xrReceiveOpaqueDataChannelNV` (see `cxrOpaqueDataChannelReceive`).
+6. **Cleanup** with `xrShutdownOpaqueDataChannelNV`.
 
-**Important**: Data size is limited to `XR_NV_OPAQUE_BUF_SIZE` bytes per message.
+> Per-message size is limited to `XR_NV_OPAQUE_BUF_SIZE` bytes.
+
+---
 
 ## LÖVR Integration
 
-### Plugin Structure
+### Plugin layout
 
-```
+```text
 plugins/nvidia/
-├── CMakeLists.txt          # Build configuration
-├── include/                # CloudXR™ Header files
+├── CMakeLists.txt          # Build configuration (reads CLOUDXR_INCLUDE_PATH / CLOUDXR_LIB_PATH)
 ├── src/                    # Source code
 │   ├── nvidia_cloudxr_*.c  # Core CloudXR™ integration
 │   └── l_nvidia_cloudxr.c  # Lua bindings
-├── lib/                    # CloudXR™ runtime libraries
-│   ├── linux-x86_64/       # Linux libraries
-│   └── windows-x86_64/     # Windows libraries
 └── examples/               # Example implementations
     └── cloudxr/            # CloudXR™ Lua project
 ```
 
-### Using the Plugin in Your LÖVR App
+The CloudXR SDK is not vendored. The build scripts extract it to `build/cloudxr/CloudXR-*-sdk/` and pass include / library paths to CMake. For the full layout including build outputs and cached archives, see [Project layout after a build](#project-layout-after-a-build) in Advanced Configuration.
 
-**Step 1: Configure LÖVR**
+### Using the plugin in your LÖVR app
 
-In your `conf.lua`, disable the default headset module and set up CloudXR™:
+**Step 1 — Configure LÖVR** in `conf.lua`:
 
 ```lua
 function lovr.conf(t)
-    -- Disable default headset since the plugin dynamically initializes it after CloudXR™ runtime has initialized.
+    -- Disable the default headset module since the plugin initializes it after CloudXR™ is up.
     t.modules.headset = false
-    
-    -- Request CloudXR™ opaque data extension
+
+    -- Request the CloudXR™ opaque data extension
     t.headset.extensions = {
-        "XR_NVX1_opaque_data_channel" -- Corresponding to XR_NV_OPAQUE_DATA_CHANNEL_EXTENSION_NAME
+        "XR_NVX1_opaque_data_channel" -- Corresponds to XR_NV_OPAQUE_DATA_CHANNEL_EXTENSION_NAME
     }
 end
 ```
 
-**Step 2: Load and Initialize CloudXR™**
+**Step 2 — Load and start CloudXR™:**
 
 ```lua
--- Load the plugin
 local success, nv_cxr = pcall(require, 'nvidia')
 if not success then
     print("Failed to load CloudXR™ plugin")
     return
 end
 
--- Initialize the runtime
 nv_cxr.initRuntime()
-
--- Configure properties (optional)
-nv_cxr.setRuntimeStringProperty("device-profile", "apple-vision-pro")
-
--- Start the service
+nv_cxr.setRuntimeStringProperty("device-profile", "apple-vision-pro")  -- optional
 nv_cxr.startRuntime()
 ```
 
-**Step 3: Initialize OpenXR (after CloudXR™ is running)**
+**Step 3 — Initialize OpenXR (after CloudXR™ is running):**
 
 ```lua
--- Now safe to initialize OpenXR
--- Note: HeadsetManager and CloudXRManager are helper modules from the example code
--- See plugins/nvidia/examples/cloudxr/ for full implementation
+-- For auto-* device profiles, poll nv_cxr.pollEvent() first
+-- and compare against nv_cxr.RESULT / nv_cxr.EVENT constants,
+-- or retry this step after XR_ERROR_FORM_FACTOR_UNAVAILABLE.
+-- See plugins/nvidia/examples/cloudxr/ for the full implementation.
 if not HeadsetManager.init() then
     print("Failed to initialize headset")
     return
 end
 
--- Initialize opaque data channels after OpenXR
 if not CloudXRManager.initOpaqueDataChannel() then
     print("Failed to initialize Opaque Data Channel")
     return
 end
 ```
 
-**Step 4: Use Opaque Data Channels**
+**Step 4 — Use opaque data channels:**
 
 ```lua
 function CloudXRManager.update()
-...
-    -- Check if channel is connected
     if nv_cxr.getOpaqueDataChannelState() == nv_cxr.OPAQUE_DATA_CHANNEL_STATUS.CONNECTED then
-        -- Receive data from headset
         local data = nv_cxr.receiveOpaqueDataChannel()
         if data then
             print("Received from headset:", data)
-
-            -- Echo the received data back to demonstrate bi-directional communication
-            local success = nv_cxr.sendOpaqueDataChannel("Echo: " .. data)
+            nv_cxr.sendOpaqueDataChannel("Echo: " .. data)
         end
     end
-...
+end
 ```
 
-In this example, we simply echo back the data the client sends, but data can be sent at any arbitrary point.
-
-**Step 5: Cleanup**
+**Step 5 — Cleanup on shutdown:**
 
 ```lua
--- When shutting down
 nv_cxr.destroyRuntime()
 ```
 
-## Meta Quest Support (CloudXR.js)
+---
 
-CloudXR™ supports **Meta Quest 2/3/3S** headsets through [CloudXR.js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html), which is generally available as of CloudXR 6.1.0. CloudXR.js enables streaming from any OpenXR-compatible server application (including this LÖVR plugin) to web-based headset clients over WebRTC.
+## Advanced Configuration
 
-**Download CloudXR.js:** [NVIDIA NGC - CloudXR.js](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js)
-
-**Running with Meta Quest:**
-
-Use the `--webrtc` flag to configure the runtime with the `auto-webrtc` device profile:
+### Build options
 
 ```bash
-./run.sh --webrtc
-run.bat --webrtc
+./build.sh [options]
+.\build.bat [options]
+
+Options:
+  --lovr-repo <url>                       Custom LOVR repository (also: --lovr-repo=<url>)
+  --lovr-branch <branch>                  Use a branch or tag (clears pinned commit)
+  --lovr-commit <hash>                    Use a specific commit (clears branch)
+  --without-cloudxrjs                     Skip CloudXR.js sample setup (default is enabled)
+  Debug|Release|RelWithDebInfo|MinSizeRel Build type (default: Debug)
+  --clean                                 Wipe build outputs; keep cached CloudXR archives in build/cloudxr/
 ```
 
-**Connection modes:**
-- **HTTP mode**: Simplest setup for local development. Direct WebSocket connection to CloudXR™ Runtime. Requires browser flag on Quest to allow insecure origins.
-- **HTTPS mode**: Required for production deployments. Requires a WebSocket SSL proxy (HAProxy, nginx, etc.).
+Anything not listed is forwarded as-is to the `cmake` configure step (e.g. `./build.sh -DLOVR_BUILD_BUNDLE=ON`). This also means typos in option names pass through silently and surface as a `cmake` error rather than a `build.sh` error.
 
-For full setup instructions, including client configuration, WebSocket proxy setup, and network requirements, refer to the [CloudXR.js documentation](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html).
+By default the build clones LÖVR and checks out a pinned commit (see `LOVR_COMMIT` near the top of `build.sh` and `build.bat`). Pass `--lovr-branch` or `--lovr-commit` to override; specifying both is not supported (last one wins). `--clean` removes everything in `build/` *except* the cached CloudXR archives so the next build doesn't re-download them. To wipe everything including the archives, delete the build directory: `rm -rf build && ./build.sh` (or `rmdir /s /q build && build.bat`).
+
+**Examples:**
+
+```bash
+./build.sh Release                    # Release build with pinned commit
+./build.sh --lovr-branch dev          # Build from LÖVR dev branch
+./build.sh --without-cloudxrjs        # Skip CloudXR.js setup
+./build.sh --clean && ./build.sh      # Clean rebuild (keeps cached archives)
+rm -rf build && ./build.sh            # Wipe everything (re-downloads archives)
+```
+
+**What gets built:**
+
+- `nvidia.dll` (Windows) or `nvidia.so` (Linux) — the CloudXR™ plugin.
+- CloudXR™ runtime libraries and runtime manifest copied to the output directory.
+- The example application, ready to run.
+
+### Project layout after a build
+
+The plugin source lives under `plugins/nvidia/`. The build scripts stage everything else (the LÖVR clone, the CloudXR™ SDK, the CloudXR.js sample, build outputs) under `build/` so the repository stays source-only and a clean checkout is just `rm -rf build`.
+
+```text
+cloudxr-lovr-plugin-sample/
+├── plugins/nvidia/                        # Plugin source (copied/symlinked into build/src/plugins/nvidia/)
+│   ├── CMakeLists.txt                     # Reads CLOUDXR_INCLUDE_PATH / CLOUDXR_LIB_PATH
+│   ├── src/
+│   │   ├── nvidia_cloudxr_*.c             # Core CloudXR™ integration
+│   │   └── l_nvidia_cloudxr.c             # Lua bindings
+│   └── examples/cloudxr/                  # CloudXR™ Lua example project
+└── build/                                 # All generated/downloaded content lives here
+    ├── src/                               # LÖVR clone with plugin integrated
+    │   └── plugins/nvidia/                # ← plugin copied/symlinked here at build time
+    ├── cloudxr/                           # CloudXR™ SDK + CloudXR.js stage area
+    │   ├── CloudXR-*-sdk.{tar.gz,zip}     # Cached CloudXR™ Runtime SDK archive
+    │   ├── CloudXR-*-sdk/                 # Extracted SDK (headers + runtime libs)
+    │   ├── nvidia-cloudxr-*.tgz           # Cached CloudXR.js npm package
+    │   ├── cloudxr-js-samples/react/      # CloudXR.js React sample (built by build.sh/build.bat)
+    │   └── cloudxr-js-dev-server.log      # Linux dev-server output (auto-webrtc runs)
+    ├── bin/                               # Linux LÖVR build output
+    ├── Debug/                             # Windows Debug LÖVR build output
+    └── Release/                           # Windows Release LÖVR build output
+```
+
+> The CloudXR™ SDK is not vendored in this repo. The build scripts extract it to `build/cloudxr/CloudXR-*-sdk/` and pass `CLOUDXR_INCLUDE_PATH` / `CLOUDXR_LIB_PATH` to CMake. Likewise, the CloudXR.js React sample is cloned into `build/cloudxr/cloudxr-js-samples/` from [NVIDIA/cloudxr-js-samples](https://github.com/NVIDIA/cloudxr-js-samples) and the local `nvidia-cloudxr-*.tgz` package is installed into it.
+
+### Use a specific CloudXR Runtime / CloudXR.js version
+
+The build prefers an archive in `build/cloudxr/` whose filename matches `CLOUDXR_RUNTIME_VERSION` / `CLOUDXR_JS_VERSION`. If that exact archive is not present, the build falls back to the first matching `CloudXR-*-Linux*-sdk.tar.gz`, `CloudXR-*-Win64-sdk.zip`, or `nvidia-cloudxr-*.tgz`, and finally downloads the default version from NGC if nothing local matches.
+
+To pin a version, either set `CLOUDXR_RUNTIME_VERSION` / `CLOUDXR_JS_VERSION` in your environment, or edit the defaults near the top of `build.sh` / `build.bat`. To switch SDKs, drop the new archive into `build/cloudxr/`, run `./build.sh --clean` (or `build.bat --clean`), and rebuild — `--clean` keeps cached archives.
+
+The build scripts reuse the previously-extracted SDK in `build/cloudxr/CloudXR-*-sdk/` across builds.
+
+> **Note:** for Apple Vision Pro, use the native CloudXR™ client from the SDK package. For Meta Quest and PICO 4 Ultra, use the CloudXR.js browser client (set up automatically by the build).
+
+For detailed networking requirements (firewall / port info), see the [NVIDIA CloudXR™ SDK Documentation](https://docs.nvidia.com/cloudxr-sdk).
+
+### Device profiles
+
+The runtime supports several CloudXR device profiles. Static profiles connect immediately. `auto-*` profiles wait for a CloudXR client connection before calling `lovr.headset.connect()`. If no profile is set, the sample defaults to `apple-vision-pro`.
+
+```bash
+./run.sh                                       # default: apple-vision-pro
+./run.sh --device-profile=auto-native
+./run.sh --device-profile=auto-webrtc          # also starts CloudXR.js dev server
+./run.sh --device-profile=quest3
+./run.sh --device-profile=apple-vision-pro
+
+run.bat --device-profile=auto-webrtc           # Windows; dev server in a new window
+```
+
+For `auto-*` profiles, the runtime may report that no OpenXR system is available until a client headset has connected. Apps can either poll CloudXR client-connection events before calling into LÖVR, or retry OpenXR `xrGetSystem` after `XR_ERROR_FORM_FACTOR_UNAVAILABLE`. The sample uses the CloudXR event poll and also tolerates the OpenXR retry path.
+
+> `nv_cxr.pollEvent()` requires CloudXR service API 1.0.7 or newer (CloudXR Runtime 6.0.5+). Compare values returned by `nv_cxr.pollEvent()` with `nv_cxr.RESULT.*` and `nv_cxr.EVENT.*` constants when implementing the polling loop in Lua.
+
+### CloudXR.js configuration
+
+CloudXR.js enables streaming this server to web-based headset clients (Meta Quest 2/3/3S, PICO 4 Ultra) over WebRTC. See the [CloudXR.js documentation](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html) and [client setup guide](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html) for full details.
+
+**Build behaviour.** By default `./build.sh` / `build.bat` downloads or reuses `build/cloudxr/nvidia-cloudxr-*.tgz`, checks for Node.js v20.19.0+, clones the samples repo to `build/cloudxr/cloudxr-js-samples/`, installs the local CloudXR.js package into the React sample, installs sample dependencies, and runs `npm run build`. Pass `--without-cloudxrjs` to skip all of that. The npm install uses the public registry so stale user-level private registry credentials don't break setup.
+
+**Run behaviour.** When `run.sh`/`run.bat` is invoked with `--device-profile=auto-webrtc`, it starts `npm run dev-server` from `build/cloudxr/cloudxr-js-samples/react` before launching LÖVR.
+
+- On Linux, dev-server output is written to `build/cloudxr/cloudxr-js-dev-server.log` and the server is stopped when `run.sh` exits.
+- On Windows, the dev server opens in a separate command window that you must close yourself.
+- If port 8080 is already in use, the run script assumes you have your own CloudXR.js server running there and skips starting another one.
+- Pass `--without-cloudxrjs` to `run.sh` / `run.bat` to explicitly skip starting the local dev server (useful when you're hosting CloudXR.js on a different host or port and want the run script to stay out of the way).
+
+**Connection modes:**
+
+- **HTTP mode (default)** — simplest local setup. The Quest browser must allow insecure origins for WebXR (see the [Meta Quest configuration](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html#meta-quest-configuration) section of the CloudXR.js docs).
+- **HTTPS mode** — required for production deployments and for headsets whose browser doesn't accept the insecure-origin workaround (e.g. **PICO 4 Ultra**). The dev server started by `run.sh`/`run.bat` is HTTP-only, so for HTTPS you must run your own CloudXR.js server (typically behind a WebSocket SSL proxy like HAProxy or nginx) and tell the run script to skip starting the bundled one:
+
+  ```bash
+  ./run.sh --device-profile=auto-webrtc --without-cloudxrjs
+  ```
+
+  See the [HTTPS Mode instructions](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html#https-mode-development-and-production) and [WebSocket Proxy Setup](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/websocket_proxy_setup.html) for the CloudXR.js server side.
+- **HTTPS mode (native TLS)** — alternative to a proxy: the runtime terminates TLS itself when configured with a certificate and key, so clients connect directly via `wss://`. See the [Secure Streaming (TLS)](#secure-streaming-tls) section below.
+
+**Manual CloudXR.js commands.** If you invoke LÖVR directly instead of using `run.sh` / `run.bat`, start the dev server yourself first:
+
+```bash
+cd build/cloudxr/cloudxr-js-samples/react
+npm run dev-server
+```
+
+To re-install the CloudXR.js package and sample dependencies by hand (the build script normally does this for you), run from `build/cloudxr/cloudxr-js-samples/react/`:
+
+```bash
+npm --registry https://registry.npmjs.org/ install ../../nvidia-cloudxr-*.tgz
+npm --registry https://registry.npmjs.org/ install
+npm run build
+```
+
+### Provide your own CloudXR™ Runtime SDK archive
+
+The build scripts keep CloudXR™ runtime files under `build/cloudxr/` so the repo stays source-only. If you already have an SDK archive, place it in `build/cloudxr/` before running the build; otherwise the scripts download the default archive with `curl`:
+
+- **Linux**: `build.sh` downloads or reuses `build/cloudxr/CloudXR-<version>-Linux-sdk.tar.gz`.
+- **Windows**: `build.bat` downloads or reuses `build\cloudxr\CloudXR-<version>-Win64-sdk.zip`.
+
+`<version>` defaults to `CLOUDXR_RUNTIME_VERSION` (see [Use a specific CloudXR Runtime / CloudXR.js version](#use-a-specific-cloudxr-runtime--cloudxrjs-version)).
+
+The build extracts the SDK in place, passes the include/library paths to CMake (no files are copied into `plugins/nvidia/`), and stages the runtime libraries plus `openxr_cloudxr.json` into the build output during the CMake build.
+
+### Secure Streaming (TLS)
+
+The CloudXR™ Runtime can terminate TLS directly on its signaling endpoint, so CloudXR.js clients can connect over `wss://` without a separate proxy. This is the recommended setup for single-runtime deployments.
+
+#### Generate a self-signed certificate (development)
+
+For local testing, a self-signed certificate is sufficient:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+    -keyout key.pem -out cert.pem \
+    -subj "/CN=<your-server-ip-or-hostname>" \
+    -addext "subjectAltName=IP:<your-server-ip>"
+```
+
+Replace `<your-server-ip>` with the IP address (or hostname) the headset client will use to reach the server. The `subjectAltName` is required for browsers to accept the cert for that address.
+
+**For production, use a certificate signed by a trusted CA (e.g. Let's Encrypt or an internal CA).**
+
+#### Run with TLS enabled
+
+Pass the PEM files to the run script:
+
+```bash
+# Linux
+./run.sh --cert /path/to/cert.pem --key /path/to/key.pem
+
+# Windows
+run.bat --cert C:\path\to\cert.pem --key C:\path\to\key.pem
+
+# Combine with auto-webrtc device profile for CloudXR.js
+./run.sh --cert /path/to/cert.pem --key /path/to/key.pem --device-profile=auto-webrtc
+```
+
+Alternatively, export the env vars directly:
+
+```bash
+export CLOUDXR_CERT_PATH=/path/to/cert.pem
+export CLOUDXR_KEY_PATH=/path/to/key.pem
+./run.sh
+```
+
+When TLS is enabled you should see this line during startup:
+
+```text
+CloudXR native TLS enabled (cert: /path/to/cert.pem)
+```
+
+#### Trusting a self-signed certificate in the browser
+
+When using a self-signed certificate, the browser will refuse the `wss://` connection until the cert is trusted for that origin. Have the user navigate to `https://<server-ip>:<port>/` in a separate tab — where `<port>` is the WebRTC signaling port (`49100` by default in `--device-profile=auto-webrtc` mode; `48010` for the native CloudXR client path) — accept the security warning ("Advanced" → "Proceed"), and then return to the CloudXR.js client page. The page you land on after accepting may be blank or show a generic error; only the TLS handshake matters, and the cert is now trusted for that origin.
+
+This step is not needed for certificates signed by a trusted CA.
+
+---
 
 ## Troubleshooting
 
-### Check the Runtime Logs
+### Check the runtime logs
 
-When the CloudXR™ runtime starts, it outputs the log file location. As an example:
+When the CloudXR™ runtime starts, it logs the log file location, e.g.:
 
-```
+```text
 logFile:   /tmp/com.nvidia.cloudxr_MxrYg9/cxr_server.2025-11-18T160550Z.log
 ```
 
-Open this log file to diagnose runtime issues. Most CloudXR™ errors will be detailed here.
+Open that file to diagnose runtime issues. Most CloudXR™ errors are detailed there.
 
-**Console Logging:** If you prefer runtime logs in the console instead of a file, set the environment variable:
+To send runtime logs to the console instead of a file:
 
 ```bash
 export NV_CXR_FILE_LOGGING=false
 ```
 
-Then run your application. Runtime logs will appear in the console output.
-
-### Common Issues
+### Common issues
 
 | Problem | Diagnosis | Solution |
-|---------|-----------|----------|
+|---|---|---|
 | **"Failed to load plugin"** | Plugin binary not found | Ensure LÖVR was built with plugin support |
-| **"CloudXR™ service failed to start"** | Service initialization error | Check the runtime log file for specific errors. Verify CloudXR™ ports are open in your firewall |
-| **"OpenXR runtime not found"** | Runtime JSON not set | Verify `XR_RUNTIME_JSON` environment variable points to `openxr_cloudxr.json` |
-| **"Failed to start headset"** | LÖVR OpenXR initialization failed | Check the error message that follows. Verify OpenXR runtime is properly configured |
-| **Headset won't connect** | Network or client issue | Ensure both devices are on the same network and CloudXR™ client is running |
-| **Runtime lock file error** | See below | Previous runtime didn't exit cleanly |
+| **"CloudXR™ service failed to start"** | Service initialization error | Check the runtime log file. Verify CloudXR™ ports are open in your firewall |
+| **"OpenXR runtime not found"** | Runtime JSON not set | Verify `XR_RUNTIME_JSON` points to `openxr_cloudxr.json` |
+| **"Failed to start headset"** | LÖVR OpenXR initialization failed | Check the error message that follows. Verify the OpenXR runtime is properly configured |
+| **Headset won't connect** | Network or client issue | Ensure both devices are on the same network and the CloudXR™ client is running |
+| **Quest browser shows "WebXR not supported"** | Browser flag missing | Configure `unsafely-treat-insecure-origin-as-secure` for `http://<server-ip>:8080` ([instructions](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html#meta-quest-configuration)) |
+| **CloudXR.js page is missing** | React sample not installed or dev server not running | Run `./build.sh` (default behaviour sets it up), or host your own CloudXR.js server. The run scripts warn and continue if the local sample/dev server isn't available. |
+| **Port 8080 is already in use** | Existing CloudXR.js server (intentional or orphan) | The run scripts skip the local dev server and continue, assuming the existing server is serving CloudXR.js. To use your own server explicitly, pass `--without-cloudxrjs` to `run.sh`/`run.bat`. To kill an orphan: Linux `fuser -k 8080/tcp`; Windows close the leftover "CloudXR.js dev server" window. |
+| **Runtime lock file error** | See [Runtime Lock File Error](#runtime-lock-file-error) | Previous runtime didn't exit cleanly |
 
-### Runtime Lock File Error
+### Runtime lock file error
 
-If you see this error in the console or log file:
+Error message:
 
-```
+```text
 ERROR [start] Another instance of the runtime appears to be running (lock file exists at /run/user/361936563/runtime_started)
 ```
 
-**Cause:** Either another CloudXR™ runtime is already running, or the previous LÖVR instance crashed prior to cleaning up the CloudXR™ runtime.
+**Cause:** another CloudXR™ runtime is already running, or the previous LÖVR instance crashed before cleaning up.
 
-**Solution:** 
-1. Check if another CloudXR™ application is running. If so, stop it first.
-2. If no other runtime is running, delete the lock file:
+**Fix:**
+
+1. Stop any other CloudXR™ application.
+2. If nothing else is running, delete the lock file:
+
    ```bash
    rm /run/user/361936563/runtime_started  # Use the path from your error message
    ```
-3. Try running your application again.
 
-### Linux Exit Segmentation Fault
+3. Try again.
 
-On Linux, when exiting the application you may see an error like:
+### Linux exit segmentation fault
 
+On Linux you may see this on shutdown:
+
+```text
+./run.sh: line ...: 225091 Segmentation fault      "./$(basename "$LOVR_BIN")" "$EXAMPLE_REL_PATH" "$@"
 ```
-./run.sh: line 139: 225091 Segmentation fault      "./$(basename "$LOVR_BIN")" "$EXAMPLE_REL_PATH" $DEVICE_PROFILE
-```
 
-**Cause:** This is a known issue in the CloudXR™ Runtime during application shutdown.
+This is a known shutdown-time issue in the CloudXR™ Runtime that does not affect runtime functionality. It will be fixed in a future CloudXR™ Runtime release.
 
-**Impact:** This error occurs during cleanup and does not affect the functionality of the application while running. It can be safely ignored.
+### Getting help
 
-**Status:** This issue will be fixed in a future CloudXR™ Runtime release.
+- **LÖVR issues**: [LÖVR Documentation](https://lovr.org/docs)
+- **CloudXR™ issues**: [NVIDIA CloudXR™ SDK Documentation](https://docs.nvidia.com/cloudxr-sdk)
+- **Plugin issues**: see the examples in this repository
 
-### Getting Help
-
-- **LÖVR Issues**: [LÖVR Documentation](https://lovr.org/docs)
-- **CloudXR™ Issues**: [NVIDIA CloudXR™ SDK](https://docs.nvidia.com/cloudxr-sdk) documentation
-- **Plugin Issues**: Check the examples in this repository
+---
 
 ## License
 
-MIT, see [`LICENSE`](LICENSE) for details.
+MIT — see [`LICENSE`](LICENSE).
 
 ## Glossary
 
-**CloudXR™**: NVIDIA's technology for streaming VR/AR applications over the network instead of rendering directly on the headset.
-
-**LÖVR**: Open-source VR framework built on OpenXR, using Lua as the scripting language.
-
-**OpenXR**: Cross-platform API standard for VR/AR applications, providing a common interface across different hardware.
-
-**Runtime**: Software layer that manages VR/AR hardware and provides the OpenXR API implementation.
-
-**Opaque Data Channels**: Custom communication channels that allow sending arbitrary data between your app and the headset.
-
-**XR_RUNTIME_JSON**: Environment variable that tells the OpenXR loader which runtime to use.
-
-**Headset Client**: Software running on the VR headset that receives and displays the streamed content.
-
-**Service**: Background process that manages the CloudXR™ streaming functionality.
+- **CloudXR™** — NVIDIA's technology for streaming VR/AR applications over the network.
+- **LÖVR** — open-source XR framework built on OpenXR using Lua.
+- **OpenXR** — cross-platform API standard for VR/AR applications.
+- **Runtime** — software layer managing VR/AR hardware via the OpenXR API.
+- **Opaque Data Channels** — custom communication channels between app and headset.
+- **`XR_RUNTIME_JSON`** — environment variable pointing the OpenXR loader at a runtime.
+- **Headset client** — software on the headset that receives and displays the streamed content.
+- **Service** — background process managing CloudXR™ streaming.
 
 ## Links
 
-- **CloudXR Documentation**: [docs.nvidia.com/cloudxr-sdk](https://docs.nvidia.com/cloudxr-sdk/)
-- **CloudXR SDK**: [catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk](https://catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk)
-- **CloudXR Runtime Download**: [catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-runtime](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-runtime)
-- **CloudXR.js Documentation**: [docs.nvidia.com/cloudxr-sdk/.../cloudxr_js](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html)
-- **CloudXR.js Download**: [catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js)
-- **LÖVR (upstream)**: [github.com/bjornbytes/lovr](https://github.com/bjornbytes/lovr)
-- **LÖVR Docs**: [lovr.org/docs](https://lovr.org/docs)
-
+- [CloudXR Documentation](https://docs.nvidia.com/cloudxr-sdk/)
+- [CloudXR.js Documentation](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html)
+- [CloudXR.js Client Setup Guide](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html)
+- [CloudXR SDK on NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/collections/cloudxr-sdk)
+- [CloudXR Runtime Download](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-runtime)
+- [CloudXR.js Download](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/cloudxr-js)
+- [LÖVR (upstream)](https://github.com/bjornbytes/lovr)
+- [LÖVR Docs](https://lovr.org/docs)
 
 ## Contributing
 

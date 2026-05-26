@@ -1,4 +1,4 @@
--- SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 -- SPDX-License-Identifier: MIT
 
 local Renderer = {}
@@ -127,6 +127,29 @@ function Renderer.drawControllers(pass, models)
 
     -- Draw instructions (in world space, not relative to controller)
     pass:setColor(1, 1, 1, 1)
+end
+
+function Renderer.drawHapticsStatus(pass, lastEvent, demoEnabled)
+    if not lastEvent then
+        return
+    end
+
+    local statusLines = {
+        "Haptics Harness",
+        string.format("demo: %s", demoEnabled and "on" or "off"),
+        string.format("event: #%d %s", lastEvent.count or 0, lastEvent.action or "none"),
+        string.format("hand: %s", lastEvent.hand or "none"),
+        string.format("amp: %.2f dur: %.2f freq: %.2f",
+            lastEvent.amplitude or 0.0,
+            lastEvent.duration or 0.0,
+            lastEvent.frequency or 0.0),
+        string.format("success: %s", tostring(lastEvent.success == true)),
+        "keys: 1=left 2=right 3=both 4=replace 5=stop",
+        "controllers: trigger=buzz grip=stop"
+    }
+
+    pass:setColor(1, 1, 0.8, 1)
+    pass:text(table.concat(statusLines, "\n"), -0.8, 1.45, -1.8, 0.22)
 end
 
 return Renderer

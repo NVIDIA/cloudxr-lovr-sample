@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: MIT
 
 cmake_minimum_required(VERSION 3.10)
@@ -10,11 +10,15 @@ project(lovr-nvidia-plugin)
 set(LUA_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../deps/lua")
 set(LUA_FOUND TRUE)
 
-# Platform-specific library paths
-if(WIN32)
-    set(CLOUDXR_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/windows-x86_64")
-else()
-    set(CLOUDXR_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/linux-x86_64")
+# CloudXR SDK paths. The build scripts (build.sh / build.bat) extract the SDK
+# under build/cloudxr/ and pass these as -D arguments to CMake. Configuring
+# the plugin directly (without the build scripts) requires setting both
+# CLOUDXR_INCLUDE_PATH and CLOUDXR_LIB_PATH explicitly.
+if(NOT DEFINED CLOUDXR_INCLUDE_PATH OR NOT DEFINED CLOUDXR_LIB_PATH)
+    message(FATAL_ERROR
+        "CLOUDXR_INCLUDE_PATH and CLOUDXR_LIB_PATH must be set. "
+        "Run build.sh or build.bat from the repo root, or pass both "
+        "-DCLOUDXR_INCLUDE_PATH=... and -DCLOUDXR_LIB_PATH=... to cmake.")
 endif()
 
 # Create the plugin library
@@ -24,12 +28,17 @@ add_library(nvidia SHARED
     src/l_nvidia_cloudxr.c
 )
 
+set_target_properties(nvidia PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+)
+
 # Set the plugin target property for the main CMakeLists.txt to discover
 set_property(DIRECTORY PROPERTY LOVR_PLUGIN_TARGETS nvidia)
 
 # Set include directories - the main project will handle additional includes
 target_include_directories(nvidia PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    "${CLOUDXR_INCLUDE_PATH}"
     ${CMAKE_SOURCE_DIR}/deps/openxr/include
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/modules
@@ -49,15 +58,22 @@ set_target_properties(nvidia PROPERTIES
 
 # Platform-specific settings
 if(WIN32)
+    if(TARGET lovr)
+        # Export lovr.exe symbols for this plugin without auto-exporting every DLL target.
+        set_target_properties(lovr PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
     target_compile_definitions(nvidia PRIVATE _WIN32)
     # Ensure we're importing, not exporting global variables
     target_compile_definitions(nvidia PRIVATE LOVR_API_IMPORT)
+    if(MSVC)
+        target_compile_options(nvidia PRIVATE /experimental:c11atomics)
+    endif()
     # Copy all CloudXR runtime DLLs to output directory
     add_custom_command(TARGET nvidia POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Copying CloudXR runtime DLLs..."
         # Copy all DLLs from lib directory to main executable directory
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CLOUDXR_LIB_PATH}
+        "${CLOUDXR_LIB_PATH}"
         $<TARGET_FILE_DIR:lovr>
         COMMAND ${CMAKE_COMMAND} -E echo "All CloudXR runtime DLLs copied successfully"
     )
@@ -71,7 +87,7 @@ else()
     add_custom_command(TARGET nvidia POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo "Copying CloudXR Linux libraries preserving symlinks..."
         # Call cp directly (not through bash -c) to preserve symlinks and RPATH
-        COMMAND cp -a ${CLOUDXR_LIB_PATH}/. ${CMAKE_BINARY_DIR}/bin/
+        COMMAND cp -a "${CLOUDXR_LIB_PATH}/." ${CMAKE_BINARY_DIR}/bin/
         COMMAND ${CMAKE_COMMAND} -E echo "All CloudXR Linux libraries copied successfully"
     )
     
@@ -94,4 +110,4 @@ install(TARGETS nvidia
 )
 
 # Install headers
-install(DIRECTORY include/ DESTINATION include/lovr-nvidia) 
+install(DIRECTORY "${CLOUDXR_INCLUDE_PATH}/" DESTINATION include/lovr-nvidia)

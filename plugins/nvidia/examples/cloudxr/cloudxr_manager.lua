@@ -1,4 +1,4 @@
--- SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 -- SPDX-License-Identifier: MIT
 
 -- CloudXR Manager Module
@@ -13,6 +13,27 @@ local CloudXRManager = {}
 -- Global variables to store the CloudXR plugin and received data
 local nv_cxr = nil              -- Reference to the loaded CloudXR plugin
 local lastReceivedData = nil    -- Cache of the most recent data received from headset
+local waitingForClientConnection = false
+local clientConnectionReady = false
+
+local DEFAULT_DEVICE_PROFILE = "apple-vision-pro"
+
+local function getDeviceProfile(args)
+    if args then
+        if args["device-profile"] ~= nil then
+            if type(args["device-profile"]) ~= "string" or args["device-profile"] == "" then
+                return nil, "Use --device-profile=<profile> (e.g. --device-profile=apple-vision-pro)"
+            end
+            return args["device-profile"]
+        end
+    end
+
+    return DEFAULT_DEVICE_PROFILE
+end
+
+local function shouldPollForDeviceProfile(deviceProfile)
+    return type(deviceProfile) == "string" and deviceProfile:sub(1, 5) == "auto-"
+end
 
 -- Initialize the CloudXR plugin by loading the nvidia.dll/nvidia.so library
 -- This loads the CloudXR plugin and makes its functions available
@@ -68,10 +89,19 @@ function CloudXRManager.initRuntime(args)
 
     -- Configure CloudXR runtime properties before starting the service
     -- These settings control how CloudXR behaves and which headset to target
+    local deviceProfile, profileError = getDeviceProfile(args)
+    if not deviceProfile then
+        print(profileError)
+        nv_cxr.destroyRuntime()
+        return false
+    end
+    local shouldWaitForClient = shouldPollForDeviceProfile(deviceProfile)
+    print("CloudXR device profile:", deviceProfile)
 
-    -- Set device profile to Apple Vision Pro (can be overridden by environment variables)
-    if not nv_cxr.setRuntimeStringProperty("device-profile", "apple-vision-pro") then
-        print("Failed to set device profile")
+    if not nv_cxr.setRuntimeStringProperty("device-profile", deviceProfile) then
+        print("Failed to set " .. deviceProfile .. " device profile")
+        nv_cxr.destroyRuntime()
+        return false
     end
 
     -- Enable audio streaming to the headset
@@ -79,38 +109,98 @@ function CloudXRManager.initRuntime(args)
         print("Failed to set enable_audio property")
     end
 
-    -- Early Access: Configure CloudXR runtime properties for Quest 3
-    -- https://developer.nvidia.com/cloudxr-sdk-early-access-program
-    if args and args.webrtc then
-        if not nv_cxr.setRuntimeStringProperty("device-profile", "quest3") then
-            print("Failed to set webrtc property")
+    -- Native TLS: when both env vars are set, the runtime terminates wss://
+    -- itself (no separate proxy). Property values are PEM file contents.
+    local cert_path = os.getenv("CLOUDXR_CERT_PATH")
+    local key_path = os.getenv("CLOUDXR_KEY_PATH")
+    if cert_path and key_path then
+        local function readPem(path)
+            local f, err = io.open(path, "rb")
+            if not f then
+                print("Failed to open PEM file:", path, err)
+                return nil
+            end
+            local content = f:read("*a")
+            f:close()
+            return content
         end
-        
-        if not nv_cxr.setRuntimeBooleanProperty("runtime-foveation", true) then
-            print("Failed to set runtime-foveation property")
+
+        local cert_pem = readPem(cert_path)
+        local key_pem = readPem(key_path)
+        if cert_pem and key_pem then
+            -- Both properties must apply, or the runtime is left half-configured.
+            local ok_cert = nv_cxr.setRuntimeStringProperty("certificate-pem", cert_pem)
+            local ok_key = nv_cxr.setRuntimeStringProperty("key-pem", key_pem)
+            if ok_cert and ok_key then
+                print("CloudXR native TLS enabled (cert: " .. cert_path .. ")")
+            else
+                print("TLS not enabled: failed to set " ..
+                      (not ok_cert and "certificate-pem" or "key-pem") .. " property")
+            end
+        else
+            print("TLS not enabled: could not read " ..
+                  (not cert_pem and "certificate" or "key") .. " PEM file")
         end
-        
-        if not nv_cxr.setRuntimeInt64Property("runtime-foveation-unwarped-width", 4096) then
-            print("Failed to set runtime-foveation-unwarped-width property")
-        end
-        
-        if not nv_cxr.setRuntimeInt64Property("runtime-foveation-warped-width", 2048) then
-            print("Failed to set runtime-foveation-warped-width property")
-        end
-        
-        if not nv_cxr.setRuntimeInt64Property("runtime-foveation-inset", 40) then
-            print("Failed to set runtime-foveation-inset property")
-        end
+    elseif cert_path or key_path then
+        print("Warning: CLOUDXR_CERT_PATH and CLOUDXR_KEY_PATH must both be set; TLS not enabled")
     end
-    
+
     -- Start the CloudXR service - this begins the streaming process
     if not nv_cxr.startRuntime() then
         print("Failed to start CloudXR service (this is expected if CloudXR runtime is not available)")
+        nv_cxr.destroyRuntime()
         return false
     end
     
     print("CloudXR service started successfully")
+
+    waitingForClientConnection = shouldWaitForClient
+    clientConnectionReady = not waitingForClientConnection
+
+    if waitingForClientConnection then
+        print("Waiting for CloudXR " .. deviceProfile .. " client connection...")
+    end
+
     return true
+end
+
+function CloudXRManager.pollClientConnection()
+    if not nv_cxr then
+        print("NVIDIA CloudXR plugin not loaded")
+        return nil
+    end
+
+    local wasReady = clientConnectionReady
+    local result, eventType = nv_cxr.pollEvent()
+    if result == nil then
+        print("Failed to poll CloudXR service event")
+        return nil
+    end
+
+    if result ~= nv_cxr.RESULT.SUCCESS then
+        print("Failed to poll CloudXR service event:", result)
+        return nil
+    end
+
+    if eventType == nv_cxr.EVENT.CLOUDXR_CLIENT_CONNECTED then
+        clientConnectionReady = true
+    elseif eventType == nv_cxr.EVENT.CLOUDXR_CLIENT_DISCONNECTED then
+        clientConnectionReady = false
+    end
+
+    waitingForClientConnection = not clientConnectionReady
+
+    if clientConnectionReady and not wasReady then
+        print("CloudXR client is connected")
+    elseif not clientConnectionReady and wasReady then
+        print("CloudXR client disconnected; waiting for reconnect...")
+    end
+
+    return clientConnectionReady
+end
+
+function CloudXRManager.isWaitingForClientConnection()
+    return waitingForClientConnection
 end
 
 -- Initialize opaque data channels for custom communication with the headset
@@ -204,6 +294,8 @@ function CloudXRManager.destroy()
         -- Clear the plugin reference
         nv_cxr = nil
     end
+    waitingForClientConnection = false
+    clientConnectionReady = false
 end
 
 return CloudXRManager

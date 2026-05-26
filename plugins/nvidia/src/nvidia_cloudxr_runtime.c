@@ -1,12 +1,8 @@
-// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: MIT
 
 #include "nvidia_cloudxr_runtime.h"
-#include <headset/headset.h>
 #include <util.h>
-
-#define XR_NO_PROTOTYPES
-#include <openxr/openxr.h>
 
 #include <assert.h>
 #include <string.h>
@@ -65,8 +61,8 @@ bool cxrRuntimeInit() {
 }
 
 void cxrRuntimeDestroy() {
-    if (cxrRuntimeState.service) {
-        cxrRuntimeStopService();
+    if (cxrRuntimeState.service && !cxrRuntimeStopService()) {
+        return;
     }
 
     if (cxrRuntimeState.library) {
@@ -103,7 +99,8 @@ bool cxrRuntimeLoadFunctions() {
         {"nv_cxr_service_start", (void**)&cxrRuntimeState.cxrServiceStart},
         {"nv_cxr_service_stop", (void**)&cxrRuntimeState.cxrServiceStop},
         {"nv_cxr_service_join", (void**)&cxrRuntimeState.cxrServiceJoin},
-        {"nv_cxr_service_destroy", (void**)&cxrRuntimeState.cxrServiceDestroy}
+        {"nv_cxr_service_destroy", (void**)&cxrRuntimeState.cxrServiceDestroy},
+        {"nv_cxr_service_poll_event", (void**)&cxrRuntimeState.cxrServicePollEvent}
     };
 
     for (int i = 0; i < sizeof(function_map) / sizeof(function_map[0]); i++) {
@@ -127,6 +124,34 @@ bool cxrRuntimeStartService() {
         lovrLog(LOG_ERROR, "CloudXR", "Failed to start service (result: %d)", result);
         return false;
     }
+    cxrRuntimeState.serviceStarted = true;
+    return true;
+}
+
+
+
+bool cxrRuntimePollEvent(nv_cxr_result_t* result, nv_cxr_event_type_t* eventType) {
+    if (!result || !eventType) {
+        lovrLog(LOG_ERROR, "CloudXR", "Cannot poll service event - output pointer is null");
+        return false;
+    }
+
+    *result = NV_CXR_INTERNAL_SERVICE_ERROR;
+    *eventType = NV_CXR_EVENT_NONE;
+
+    if (!cxrRuntimeIsInitialized()) {
+        lovrLog(LOG_ERROR, "CloudXR", "Cannot poll service event - not initialized or no service");
+        return false;
+    }
+
+    if (!cxrRuntimeState.cxrServicePollEvent) {
+        lovrLog(LOG_ERROR, "CloudXR", "Cannot poll service event - event polling function unavailable");
+        return false;
+    }
+
+    nv_cxr_event_t event = {0};
+    *result = cxrRuntimeState.cxrServicePollEvent(cxrRuntimeState.service, &event);
+    *eventType = event.type;
     return true;
 }
 
@@ -135,21 +160,23 @@ bool cxrRuntimeStopService() {
         return true;
     }
 
-    nv_cxr_result_t result = cxrRuntimeState.cxrServiceStop(cxrRuntimeState.service);
-    if (result != NV_CXR_SUCCESS) {
-        lovrLog(LOG_ERROR, "CloudXR", "Failed to stop service (result: %d)", result);
-        return false;
-    }
+    if (cxrRuntimeState.serviceStarted) {
+        nv_cxr_result_t result = cxrRuntimeState.cxrServiceStop(cxrRuntimeState.service);
+        if (result != NV_CXR_SUCCESS && result != NV_CXR_SERVICE_NOT_STARTED) {
+            lovrLog(LOG_ERROR, "CloudXR", "Failed to stop service (result: %d)", result);
+            return false;
+        }
 
-    // Join the service
-    result = cxrRuntimeState.cxrServiceJoin(cxrRuntimeState.service);
-    if (result != NV_CXR_SUCCESS) {
-        lovrLog(LOG_ERROR, "CloudXR", "Failed to join service (result: %d)", result);
-        return false;
+        result = cxrRuntimeState.cxrServiceJoin(cxrRuntimeState.service);
+        if (result != NV_CXR_SUCCESS && result != NV_CXR_SERVICE_NOT_STARTED) {
+            lovrLog(LOG_ERROR, "CloudXR", "Failed to join service (result: %d)", result);
+            return false;
+        }
     }
 
     cxrRuntimeState.cxrServiceDestroy(cxrRuntimeState.service);
     cxrRuntimeState.service = NULL;
+    cxrRuntimeState.serviceStarted = false;
     return true;
 }
 

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: MIT
 
 #include "nvidia_cloudxr_runtime.h"
@@ -38,6 +38,20 @@ static int l_cxr_runtime_stop_service(lua_State* L) {
     bool success = cxrRuntimeStopService();
     lua_pushboolean(L, success);
     return 1;
+}
+
+static int l_cxr_runtime_poll_event(lua_State* L) {
+    nv_cxr_result_t result = NV_CXR_INTERNAL_SERVICE_ERROR;
+    nv_cxr_event_type_t eventType = NV_CXR_EVENT_NONE;
+    bool success = cxrRuntimePollEvent(&result, &eventType);
+    if (!success) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_pushinteger(L, result);
+    lua_pushinteger(L, eventType);
+    return 2;
 }
 
 static int l_cxr_runtime_get_library_api_version(lua_State* L) {
@@ -335,6 +349,7 @@ static const luaL_Reg lovr_nv_cxr_functions[] = {
     { "initRuntime", l_cxr_runtime_init },
     { "destroyRuntime", l_cxr_runtime_destroy },
     { "startRuntime", l_cxr_runtime_start_service },
+    { "pollEvent", l_cxr_runtime_poll_event },
     { "stopRuntime", l_cxr_runtime_stop_service },
     { "getRuntimeLibraryApiVersion", l_cxr_runtime_get_library_api_version },
     { "getRuntimeVersion", l_cxr_runtime_get_runtime_version },
@@ -358,8 +373,41 @@ static const luaL_Reg lovr_nv_cxr_functions[] = {
     { NULL, NULL }
 };
 
+static void set_integer_field(lua_State* L, const char* name, lua_Integer value) {
+    lua_pushstring(L, name);
+    lua_pushinteger(L, value);
+    lua_settable(L, -3);
+}
+
 // Function to register enum constants
 static void register_enum_constants(lua_State* L) {
+    lua_pushstring(L, "RESULT");
+    lua_newtable(L);
+    set_integer_field(L, "SUCCESS", NV_CXR_SUCCESS);
+    set_integer_field(L, "INTERNAL_SERVICE_ERROR", NV_CXR_INTERNAL_SERVICE_ERROR);
+    set_integer_field(L, "STARTUP_FAILED", NV_CXR_STARTUP_FAILED);
+    set_integer_field(L, "NULL_OBJECT", NV_CXR_NULL_OBJECT);
+    set_integer_field(L, "NULL_PTR", NV_CXR_NULL_PTR);
+    set_integer_field(L, "SERVICE_ALREADY_STARTED", NV_CXR_SERVICE_ALREADY_STARTED);
+    set_integer_field(L, "SERVICE_NOT_STARTED", NV_CXR_SERVICE_NOT_STARTED);
+    set_integer_field(L, "PROPERTY_NAME_MALFORMED", NV_CXR_PROPERTY_NAME_MALFORMED);
+    set_integer_field(L, "PROPERTY_NAME_INVALID", NV_CXR_PROPERTY_NAME_INVALID);
+    set_integer_field(L, "ERROR_PROPERTY_VALUE_INVALID", NV_CXR_ERROR_PROPERTY_VALUE_INVALID);
+    set_integer_field(L, "ERROR_BUFFER_SIZE_INSUFFICIENT", NV_CXR_ERROR_BUFFER_SIZE_INSUFFICIENT);
+    set_integer_field(L, "ERROR_PROPERTY_READ_ONLY", NV_CXR_ERROR_PROPERTY_READ_ONLY);
+    set_integer_field(L, "PORT_UNAVAILABLE", NV_CXR_PORT_UNAVAILABLE);
+    set_integer_field(L, "ERROR_PROPERTY_WRITE_ONLY", NV_CXR_ERROR_PROPERTY_WRITE_ONLY);
+    lua_settable(L, -3);
+
+    lua_pushstring(L, "EVENT");
+    lua_newtable(L);
+    set_integer_field(L, "NONE", NV_CXR_EVENT_NONE);
+    set_integer_field(L, "CLOUDXR_CLIENT_CONNECTED", NV_CXR_EVENT_CLOUDXR_CLIENT_CONNECTED);
+    set_integer_field(L, "CLOUDXR_CLIENT_DISCONNECTED", NV_CXR_EVENT_CLOUDXR_CLIENT_DISCONNECTED);
+    set_integer_field(L, "OPENXR_APP_CONNECTED", NV_CXR_EVENT_OPENXR_APP_CONNECTED);
+    set_integer_field(L, "OPENXR_APP_DISCONNECTED", NV_CXR_EVENT_OPENXR_APP_DISCONNECTED);
+    lua_settable(L, -3);
+
     // Opaque Data Channel Status constants
     lua_pushstring(L, "OPAQUE_DATA_CHANNEL_STATUS");
     lua_newtable(L);

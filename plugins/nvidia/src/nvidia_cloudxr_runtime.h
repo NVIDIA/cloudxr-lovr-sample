@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: MIT
 
 #ifndef LOVR_NVIDIA_CLOUDXR_RUNTIME_H
@@ -16,6 +16,7 @@ typedef struct {
     void* library;
     struct nv_cxr_service* service;
     bool initialized;
+    bool serviceStarted;
     
     // Function pointers loaded from the library
     PFN_nv_cxr_get_library_api_version cxrGetLibraryApiVersion;
@@ -31,6 +32,7 @@ typedef struct {
     PFN_nv_cxr_service_stop cxrServiceStop;
     PFN_nv_cxr_service_join cxrServiceJoin;
     PFN_nv_cxr_service_destroy cxrServiceDestroy;
+    PFN_nv_cxr_service_poll_event cxrServicePollEvent;
 } CloudXRRuntimeState;
 
 // Plugin API functions
@@ -40,6 +42,7 @@ bool cxrRuntimeLoadLibrary();
 bool cxrRuntimeLoadFunctions();
 bool cxrRuntimeStartService();
 bool cxrRuntimeStopService();
+bool cxrRuntimePollEvent(nv_cxr_result_t* result, nv_cxr_event_type_t* eventType);
 bool cxrRuntimeGetLibraryApiVersion(uint32_t* major, uint32_t* minor, uint32_t* patch);
 bool cxrRuntimeGetRuntimeVersion(uint32_t* major, uint32_t* minor, uint32_t* patch);
 
