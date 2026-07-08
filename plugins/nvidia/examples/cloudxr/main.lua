@@ -7,6 +7,56 @@
 
 print("NVIDIA CloudXR Plugin Example")
 
+-- Headless mode (--headless): a headless server/cloud GPU has no presentable
+-- Vulkan surface, so LÖVR's default run loop would fail at getWindowPass()/
+-- present(). When --headless is set, install a run loop that renders and submits
+-- only the headset (OpenXR) pass — frames still flow to the CloudXR runtime —
+-- and skips all desktop-window work.
+local function isHeadless()
+    if arg then
+        for _, argument in ipairs(arg) do
+            if argument == "--headless" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+if isHeadless() then
+    function lovr.run()
+        if lovr.timer then lovr.timer.step() end
+        if lovr.load then lovr.load(arg) end
+        return function()
+            if lovr.headset then lovr.headset.pollEvents() end
+            if lovr.system then lovr.system.pollEvents() end
+            if lovr.event then
+                for name, a, b, c, d in lovr.event.poll() do
+                    if name == 'restart' then
+                        return 'restart', lovr.restart and lovr.restart()
+                    elseif name == 'quit' and (not lovr.quit or not lovr.quit(a)) then
+                        return a or 0
+                    elseif name ~= 'quit' and lovr.handlers[name] then
+                        lovr.handlers[name](a, b, c, d)
+                    end
+                end
+            end
+            local dt = 0
+            if lovr.timer then dt = lovr.timer.step() end
+            if lovr.headset then lovr.headset.update(dt) end
+            if lovr.update then lovr.update(dt) end
+            if lovr.audio then lovr.audio.update(dt) end
+            if lovr.graphics then
+                local headset = lovr.headset and lovr.headset.getPass()
+                if headset and (not lovr.draw or lovr.draw(headset)) then headset = nil end
+                lovr.graphics.submit(headset)
+            end
+            if lovr.headset then lovr.headset.submit() end
+            if lovr.math then lovr.math.drain() end
+        end
+    end
+end
+
 -- Import our custom modules
 -- These handle different aspects of the CloudXR integration
 local CloudXRManager = require('cloudxr_manager')  -- Manages CloudXR runtime and opaque data channels
@@ -356,10 +406,23 @@ function lovr.load(args)
         print("Skipping CloudXR Runtime initialization (--use_system_runtime flag detected)")
     end
     
+    AppState.useSystemRuntime = parsedArgs.use_system_runtime == true
+
     if CloudXRManager.isWaitingForClientConnection() and not parsedArgs.use_system_runtime then
         AppState.state = STATE.WAITING_FOR_CLIENT
         AppState.retryHeadsetOnFormFactor = true
         return
+    end
+
+    -- A system auto-* runtime only learns its form factor once the CloudXR client
+    -- connects, so don't fail on the first headset init -- keep retrying until
+    -- OpenXR exposes the form factor (i.e. the client has connected). nv_cxr event
+    -- polling isn't available here (initRuntime was skipped), so lovr.update drives
+    -- the retry off form-factor availability instead of client-connect events.
+    local isAutoProfile = type(parsedArgs["device-profile"]) == "string"
+        and parsedArgs["device-profile"]:sub(1, 5) == "auto-"
+    if parsedArgs.use_system_runtime and isAutoProfile then
+        AppState.retryHeadsetOnFormFactor = true
     end
 
     initializeHeadsetStack()
@@ -428,6 +491,19 @@ function lovr.update(dt)
 
     if AppState.state ~= STATE.INITIALIZED then
         if AppState.retryHeadsetOnFormFactor and AppState.state ~= STATE.FAILED then
+            -- System runtime: nv_cxr event polling isn't initialized (initRuntime
+            -- was skipped), so drive the retry off OpenXR form-factor availability
+            -- instead of client-connect events. Keep retrying headset init until
+            -- the runtime exposes the form factor (the CloudXR client connected).
+            if AppState.useSystemRuntime then
+                AppState.headsetRetryTimer = AppState.headsetRetryTimer - dt
+                if AppState.headsetRetryTimer <= 0 then
+                    AppState.headsetRetryTimer = HEADSET_RETRY_INTERVAL
+                    initializeHeadsetStack()
+                end
+                return
+            end
+
             local connected = CloudXRManager.pollClientConnection()
             if connected == nil then
                 AppState.state = STATE.FAILED

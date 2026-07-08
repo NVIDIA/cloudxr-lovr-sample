@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.claude
+build/
+!build/cloudxr/*.tar.gz
+plugins/nvidia/include/*
+plugins/nvidia/lib/linux-*/*
+plugins/nvidia/lib/windows-*/*
+!plugins/nvidia/include/README.md
+!plugins/nvidia/lib/*/README.md
+*.zip
+CloudXR-*-Win64-*

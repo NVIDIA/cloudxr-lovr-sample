@@ -7,7 +7,7 @@ REM CloudXR LOVR Run Script for Windows
 REM =============================================================================
 REM Quick reference (see README.md for full docs):
 REM   run.bat                                Apple Vision Pro (default)
-REM   run.bat --device-profile=auto-webrtc   via CloudXR.js
+REM   run.bat "--device-profile=auto-webrtc" via CloudXR.js (quote the arg)
 REM   run.bat --without-cloudxrjs            Skip the local CloudXR.js dev
 REM                                          server (use your own server)
 REM   run.bat --cert <pem> --key <pem>       Enable native TLS (wss://)
@@ -17,9 +17,9 @@ REM ============================================================================
 setlocal enabledelayedexpansion
 
 REM Consume --cert/--key, --without-cloudxrjs, and note --device-profile=auto-webrtc.
-REM Everything else accumulates in LOVR_ARGS for LOVR. cmd.exe treats '=' as an
-REM argument separator, so "--device-profile=auto-webrtc" may arrive as either
-REM one arg or two ("--device-profile" + "auto-webrtc"); we match both forms.
+REM Everything else accumulates in LOVR_ARGS for LOVR. Quote the profile arg
+REM ("--device-profile=auto-webrtc") so cmd.exe doesn't split it on '=' into two
+REM args; the LOVR example only accepts the joined "name=value" form.
 set CERT_PATH=
 set KEY_PATH=
 set "WITHOUT_CLOUDXRJS=0"
@@ -53,7 +53,6 @@ if /i "%~1"=="--without-cloudxrjs" (
     goto :parse_args
 )
 if /i "%~1"=="--device-profile=auto-webrtc" set "USES_AUTO_WEBRTC=1"
-if /i "%~1"=="--device-profile" if /i "%~2"=="auto-webrtc" set "USES_AUTO_WEBRTC=1"
 set "LOVR_ARGS=!LOVR_ARGS! "%~1""
 shift
 goto :parse_args
@@ -163,7 +162,7 @@ exit /b %LOVR_EXIT_CODE%
 :start_cloudxr_js_dev_server
 if not exist "%CLOUDXR_JS_SAMPLE_DIR%\package.json" (
     echo WARNING: CloudXR.js React sample not found at: %CLOUDXR_JS_SAMPLE_DIR%
-    echo Re-run build.bat (without --without-cloudxrjs) to set it up,
+    echo Re-run build.bat ^(without --without-cloudxrjs^) to set it up,
     echo or run with --without-cloudxrjs if you have your own server.
     exit /b 0
 )

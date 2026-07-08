@@ -31,7 +31,7 @@ NC='\033[0m' # No Color
 # Default values
 BUILD_TYPE="Debug"
 LOVR_REPO="https://github.com/bjornbytes/lovr.git"
-LOVR_COMMIT="fa652681ef736d0ed4e11362fe23125f180eecbf"
+LOVR_COMMIT="eb04263fce90170e3f27ae451cba6b9158aa2c67"
 LOVR_BRANCH=""
 WITH_CLOUDXRJS=1
 CMAKE_EXTRA_ARGS=()
@@ -450,7 +450,7 @@ install_nodejs() {
     fi
 
     echo -e "${YELLOW}Automatic Node.js install is only supported through nvm in this script.${NC}"
-    echo -e "${YELLOW}Install Node.js v${MIN_NODE_VERSION}+ with your system package manager or from https://nodejs.org/, then rerun ./build.sh.${NC}"
+    echo -e "${YELLOW}Install Node.js v${MIN_NODE_VERSION}+ from https://nodejs.org/en/download, then rerun ./build.sh.${NC}"
     return 1
 }
 
@@ -466,7 +466,7 @@ prompt_for_node_install() {
     fi
 
     if ! load_nvm; then
-        echo -e "${YELLOW}nvm was not found. Install Node.js v${MIN_NODE_VERSION}+ manually, then rerun ./build.sh.${NC}"
+        echo -e "${YELLOW}Install Node.js v${MIN_NODE_VERSION}+ from https://nodejs.org/en/download, then rerun ./build.sh.${NC}"
         return 1
     fi
 
@@ -504,7 +504,8 @@ check_node_version() {
 
         if [ "$attempt" -eq 2 ]; then
             echo -e "${YELLOW}${reason}${NC}"
-            echo -e "${YELLOW}Node.js install did not make v${MIN_NODE_VERSION}+ available in this shell; rerun ./build.sh after fixing Node.js (or pass --without-cloudxrjs to skip).${NC}"
+            echo -e "${YELLOW}Node.js install did not make v${MIN_NODE_VERSION}+ available in this shell.${NC}"
+            echo -e "${YELLOW}Install Node.js v${MIN_NODE_VERSION}+ from https://nodejs.org/en/download, then rerun ./build.sh.${NC}"
             return 1
         fi
 
@@ -590,6 +591,20 @@ setup_cloudxr_js() {
 
     echo -e "${GREEN}✓ CloudXR.js setup complete${NC}"
 }
+
+# =============================================================================
+# Early Node.js check (CloudXR.js setup runs after the build; fail fast here)
+# =============================================================================
+
+if [ "$WITH_CLOUDXRJS" -eq 1 ]; then
+    echo -e "\n${YELLOW}Checking Node.js for CloudXR.js setup...${NC}"
+    if ! check_node_version; then
+        echo -e "${RED}❌ Node.js v${MIN_NODE_VERSION}+ is required for CloudXR.js setup.${NC}"
+        echo -e "${YELLOW}  Install from: https://nodejs.org/en/download${NC}"
+        echo -e "${YELLOW}  Or skip CloudXR.js setup with: ./build.sh --without-cloudxrjs${NC}"
+        exit 1
+    fi
+fi
 
 # =============================================================================
 # Install LÖVR Linux build dependencies

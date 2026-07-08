@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- Docker support: containerize the CloudXR LÖVR sample with a `docker/Dockerfile`, entrypoint, and NVIDIA GPU/Vulkan ICD configuration for server/cloud deployments.
+- Select the CloudXR device profile in the container via the `NV_DEVICE_PROFILE` environment variable.
+- Headless mode for server/cloud GPU deployments (no local display/HMD required).
+- Native TLS support for the CloudXR runtime (`wss://`) via `--cert`/`--key` flags on `run.sh` / `run.bat`, or the `CLOUDXR_CERT_PATH` / `CLOUDXR_KEY_PATH` environment variables.
+
+### Changed
+
+- Repinned the LÖVR commit to a newer version.
+- Build scripts fail fast with clear Node.js installation guidance when Node is missing during CloudXR.js setup.
+
+## 1.1.1
+
+### Fixed
+
+- `run.bat`: escaped the parentheses in the CloudXR.js dev-server warning so `cmd.exe` no longer mis-parses the `echo` inside the `if ()` block. This blocked `run.bat` from running on Windows Server.
+
+### Changed
+
+- README and `run.bat` quick reference: quote the `--device-profile` argument in the Windows examples (`run.bat "--device-profile=auto-webrtc"`) so `cmd.exe` doesn't split on the `=`.
+
+### Documentation
+
+- Documented the elevated/Administrator OpenXR failure on Windows: when launched from an elevated terminal (the default on AWS Windows Server's built-in Administrator), the loader ignores `XR_RUNTIME_JSON` and fails with `-51` (`XR_ERROR_RUNTIME_UNAVAILABLE`). Added the registry `ActiveRuntime` workaround and the `XR_LOADER_DEBUG=all` diagnostic.
+
 ## 1.1.0
 
 ### Added

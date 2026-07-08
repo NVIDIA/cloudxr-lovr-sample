@@ -49,7 +49,8 @@ Then launch the native CloudXR™ client on Apple Vision Pro and connect to your
 ./build.sh && ./run.sh --device-profile=auto-webrtc
 
 # Windows (US English keyboard, terminal NOT run as admin)
-.\build.bat && .\run.bat --device-profile=auto-webrtc
+# Quote the profile arg so cmd.exe doesn't split on the '='.
+.\build.bat && .\run.bat "--device-profile=auto-webrtc"
 ```
 
 > **PICO 4 Ultra users:** skip the steps below — the PICO browser doesn't accept the insecure-origin workaround used here, so it requires HTTPS. Bring your own HTTPS CloudXR.js server and pass `--without-cloudxrjs`; see the **HTTPS mode** bullet in [CloudXR.js configuration](#cloudxrjs-configuration).
@@ -323,12 +324,24 @@ The runtime supports several CloudXR device profiles. Static profiles connect im
 ./run.sh --device-profile=quest3
 ./run.sh --device-profile=apple-vision-pro
 
-run.bat --device-profile=auto-webrtc           # Windows; dev server in a new window
+run.bat "--device-profile=auto-webrtc"         # Windows; quote arg, dev server in a new window
 ```
 
 For `auto-*` profiles, the runtime may report that no OpenXR system is available until a client headset has connected. Apps can either poll CloudXR client-connection events before calling into LÖVR, or retry OpenXR `xrGetSystem` after `XR_ERROR_FORM_FACTOR_UNAVAILABLE`. The sample uses the CloudXR event poll and also tolerates the OpenXR retry path.
 
 > `nv_cxr.pollEvent()` requires CloudXR service API 1.0.7 or newer (CloudXR Runtime 6.0.5+). Compare values returned by `nv_cxr.pollEvent()` with `nv_cxr.RESULT.*` and `nv_cxr.EVENT.*` constants when implementing the polling loop in Lua.
+
+### Headless mode
+
+Pass `--headless` to `run.sh` / `run.bat` to skip the desktop preview window. Use this on a server or cloud GPU that has no display or Vulkan-presentable surface. Frames still render and stream to the CloudXR™ runtime — only the host window is omitted.
+
+```bash
+./run.sh --headless
+./run.sh --headless --device-profile=auto-native
+.\run.bat --headless
+```
+
+Internally, `--headless` causes `conf.lua` to leave `t.window = nil` (suppressing LÖVR's window creation) and `main.lua` to install a custom run loop that skips `lovr.graphics.getWindowPass()` and `lovr.graphics.present()`.
 
 ### CloudXR.js configuration
 
@@ -463,6 +476,7 @@ export NV_CXR_FILE_LOGGING=false
 | **"CloudXR™ service failed to start"** | Service initialization error | Check the runtime log file. Verify CloudXR™ ports are open in your firewall |
 | **"OpenXR runtime not found"** | Runtime JSON not set | Verify `XR_RUNTIME_JSON` points to `openxr_cloudxr.json` |
 | **"Failed to start headset"** | LÖVR OpenXR initialization failed | Check the error message that follows. Verify the OpenXR runtime is properly configured |
+| **`xrEnumerateInstanceExtensionProperties returned -51` on Windows** | Terminal is elevated; the OpenXR loader ignores `XR_RUNTIME_JSON` when run as Administrator | See [Elevated terminal on Windows (error -51)](#elevated-terminal-on-windows-error--51) |
 | **Headset won't connect** | Network or client issue | Ensure both devices are on the same network and the CloudXR™ client is running |
 | **Quest browser shows "WebXR not supported"** | Browser flag missing | Configure `unsafely-treat-insecure-origin-as-secure` for `http://<server-ip>:8080` ([instructions](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html#meta-quest-configuration)) |
 | **CloudXR.js page is missing** | React sample not installed or dev server not running | Run `./build.sh` (default behaviour sets it up), or host your own CloudXR.js server. The run scripts warn and continue if the local sample/dev server isn't available. |
@@ -489,6 +503,41 @@ ERROR [start] Another instance of the runtime appears to be running (lock file e
    ```
 
 3. Try again.
+
+### Elevated terminal on Windows (error `-51`)
+
+**Symptom:** on Windows, LÖVR fails to start the headset and logs:
+
+```text
+xrEnumerateInstanceExtensionProperties returned -51
+Failed to initialize headset
+```
+
+A CloudXR.js client may show "Connected" while no scene renders, even though the server is streaming frames — so this is **not** a network/NAT issue.
+
+**Cause:** `run.bat` sets `XR_RUNTIME_JSON` to point the OpenXR loader at the CloudXR™ runtime, but the loader deliberately ignores `XR_RUNTIME_JSON` when launched from an elevated (Administrator) context as a security measure. It falls back to the registry's `ActiveRuntime` key — which isn't set — and fails with `-51` (`XR_ERROR_RUNTIME_UNAVAILABLE`). This happens out of the box on AWS Windows Server, where you're logged in as the built-in **Administrator** and every process runs elevated.
+
+**Confirm it:** enable OpenXR loader debug logging and re-run:
+
+```bat
+set XR_LOADER_DEBUG=all
+run.bat "--device-profile=auto-webrtc"
+```
+
+A confirming line appears in the loader output:
+
+```text
+!!! WARNING !!! Environment variable XR_RUNTIME_JSON is being ignored due to
+running from an elevated context.
+```
+
+**Fix:** either launch `run.bat` from a non-elevated terminal, or register the runtime in the registry so the loader finds it regardless of elevation:
+
+```bat
+reg add "HKLM\SOFTWARE\Khronos\OpenXR\1" /v ActiveRuntime /t REG_SZ /d "C:\lovr\build\Debug\openxr_cloudxr.json" /f
+```
+
+Set the value to the path `run.bat` prints as `XR_RUNTIME_JSON:` on startup (use the `Release` path if you built in Release). After this, the scene streams correctly.
 
 ### Linux exit segmentation fault
 

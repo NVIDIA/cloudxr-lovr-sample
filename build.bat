@@ -24,7 +24,7 @@ setlocal enabledelayedexpansion
 REM Default values
 set "BUILD_TYPE=Debug"
 set "LOVR_REPO=https://github.com/bjornbytes/lovr.git"
-set "LOVR_COMMIT=fa652681ef736d0ed4e11362fe23125f180eecbf"
+set "LOVR_COMMIT=eb04263fce90170e3f27ae451cba6b9158aa2c67"
 set "LOVR_BRANCH="
 set "WITH_CLOUDXRJS=1"
 set "CMAKE_EXTRA_ARGS="
@@ -425,12 +425,13 @@ goto :skip_helper_functions
 :prompt_node_install
     echo %~1
     echo CloudXR.js setup requires Node.js v%MIN_NODE_VERSION% or later with npm.
+    echo Install from: https://nodejs.org/en/download
     set "INSTALL_NODE="
-    set /p INSTALL_NODE=Install Node.js v%MIN_NODE_VERSION% or later now? [y/N]
+    set /p INSTALL_NODE=Install Node.js v%MIN_NODE_VERSION% or later now with winget? [y/N]
     if /i "!INSTALL_NODE!"=="Y" (
         where winget >nul 2>&1
         if errorlevel 1 (
-            echo Automatic Node.js install requires winget on Windows. Install Node.js v%MIN_NODE_VERSION% or later from https://nodejs.org/, then rerun build.bat ^(or pass --without-cloudxrjs to skip^).
+            echo winget not found. Install Node.js v%MIN_NODE_VERSION% or later from https://nodejs.org/en/download, then rerun build.bat.
         ) else (
             echo Installing Node.js LTS with winget...
             winget install --id OpenJS.NodeJS.LTS -e
@@ -558,6 +559,22 @@ goto :skip_helper_functions
     exit /b 0
 
 :skip_helper_functions
+
+REM =============================================================================
+REM Early Node.js check (CloudXR.js setup runs after the build; fail fast here)
+REM =============================================================================
+
+if "%WITH_CLOUDXRJS%"=="1" (
+    echo.
+    echo Checking Node.js for CloudXR.js setup...
+    call :check_node_version
+    if errorlevel 1 (
+        echo ERROR: Node.js v%MIN_NODE_VERSION%+ is required for CloudXR.js setup.
+        echo   Install from: https://nodejs.org/en/download
+        echo   Or skip CloudXR.js setup with: build.bat --without-cloudxrjs
+        exit /b 1
+    )
+)
 
 REM =============================================================================
 REM Verify CloudXR SDK

@@ -51,11 +51,14 @@ function HeadsetManager.init()
 
     local registry = debug.getregistry()
     local conf = registry._lovrconf
-    local windowOpened, windowErr = pcall(lovr.system.openWindow, conf.window)
-    if not windowOpened then
-        print("Failed to open window:", windowErr)
-        HeadsetManager.cleanup()
-        return false, windowErr
+    -- In headless mode conf.lua leaves t.window nil, so there is no window to open.
+    if conf.window then
+        local windowOpened, windowErr = pcall(lovr.system.openWindow, conf.window)
+        if not windowOpened then
+            print("Failed to open window:", windowErr)
+            HeadsetManager.cleanup()
+            return false, windowErr
+        end
     end
 
     local started, errMsg = lovr.headset.start()

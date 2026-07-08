@@ -3,3 +3,15 @@ build/
 
 # Editor / IDE local settings
 .vscode/
+
+# CloudXR SDK files (users provide their own)
+plugins/nvidia/lib/linux-x86_64/*
+!plugins/nvidia/lib/linux-x86_64/README.md
+plugins/nvidia/lib/windows-x86_64/*
+!plugins/nvidia/lib/windows-x86_64/README.md
+plugins/nvidia/include/*
+!plugins/nvidia/include/README.md
+
+# CloudXR SDK archives placed at the repo root for docker builds
+CloudXR-*-Linux-*-sdk.tar.gz
+CloudXR-*-Win64-*sdk.zip

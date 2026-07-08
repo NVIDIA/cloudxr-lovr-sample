@@ -4,6 +4,19 @@
 -- LÖVR configuration function - called before the application starts
 -- This is where we configure LÖVR modules and set up CloudXR integration
 function lovr.conf(t)
+    -- Headless mode: skip the desktop preview window on a server/cloud GPU that has
+    -- no display. Enable by passing --headless on the command line. When headless,
+    -- main.lua installs a run loop that skips the window pass; XR rendering still
+    -- goes through OpenXR to the CloudXR runtime.
+    if arg then
+        for _, argument in ipairs(arg) do
+            if argument == "--headless" then
+                t.window = nil
+                break
+            end
+        end
+    end
+
     -- Disable default graphics module since we'll initialize it manually after CloudXR
     t.modules.graphics = false
     
@@ -22,7 +35,7 @@ function lovr.conf(t)
     -- Check if we should set the CloudXR runtime JSON path
     -- This can be disabled with --use_system_runtime flag for development
     local shouldSetRuntimeJson = true
-    
+
     -- Parse command line arguments to check for --use_system_runtime flag
     if arg then
         for i, argument in ipairs(arg) do
