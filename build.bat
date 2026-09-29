@@ -50,6 +50,10 @@ set "CLOUDXR_SDK_DIR="
 set "CLOUDXR_SDK_INCLUDE_DIR="
 set "CLOUDXR_SDK_LIB_DIR="
 set "CLOUDXR_JS_PACKAGE="
+REM Branch the build-managed samples clone is synced to on every build.
+set "CLOUDXR_JS_SAMPLES_BRANCH=main"
+REM Set by --samples-repo: user-provided clone that is used as-is (never synced).
+set "SAMPLES_REPO_OVERRIDE="
 
 REM Parse arguments
 :parse_args
@@ -81,6 +85,21 @@ if "%~1"=="--clean" (
     exit /b 0
 )
 
+if "%~1"=="--samples-repo" (
+    if "%~2"=="" (
+        echo ERROR: Missing value for --samples-repo
+        exit /b 1
+    )
+    set "NEXT_ARG=%~2"
+    if "!NEXT_ARG:~0,1!"=="-" (
+        echo ERROR: Missing value for --samples-repo
+        exit /b 1
+    )
+    set "SAMPLES_REPO_OVERRIDE=%~2"
+    shift
+    shift
+    goto parse_args
+)
 if "%~1"=="--lovr-repo" (
     if "%~2"=="" (
         echo ERROR: Missing value for --lovr-repo
@@ -131,8 +150,21 @@ if "%~1"=="--lovr-commit" (
     goto parse_args
 )
 
-REM Accept --lovr-repo=URL / --lovr-branch=NAME / --lovr-commit=SHA forms.
+REM Accept --lovr-repo=URL / --lovr-branch=NAME / --lovr-commit=SHA / --samples-repo=DIR forms.
 set "CURRENT_ARG=%~1"
+if /i "!CURRENT_ARG:~0,15!"=="--samples-repo=" (
+    set "SAMPLES_REPO_OVERRIDE=!CURRENT_ARG:~15!"
+    if "!SAMPLES_REPO_OVERRIDE!"=="" (
+        echo ERROR: Missing value for --samples-repo
+        exit /b 1
+    )
+    if "!SAMPLES_REPO_OVERRIDE:~0,1!"=="-" (
+        echo ERROR: Missing value for --samples-repo
+        exit /b 1
+    )
+    shift
+    goto parse_args
+)
 if /i "!CURRENT_ARG:~0,12!"=="--lovr-repo=" (
     set "LOVR_REPO=!CURRENT_ARG:~12!"
     if "!LOVR_REPO!"=="" (
@@ -211,6 +243,21 @@ shift
 goto parse_args
 
 :done_parsing
+
+REM Point the build at a user-provided samples clone. Resolve to an absolute
+REM path because setup_cloudxr_js pushd's into the sample directory.
+if defined SAMPLES_REPO_OVERRIDE (
+    if not exist "!SAMPLES_REPO_OVERRIDE!\react\package.json" (
+        echo ERROR: --samples-repo !SAMPLES_REPO_OVERRIDE! does not contain react\package.json
+        exit /b 1
+    )
+    for %%I in ("!SAMPLES_REPO_OVERRIDE!") do set "CLOUDXR_JS_SAMPLES_DIR=%%~fI"
+    set "CLOUDXR_JS_SAMPLE_DIR=!CLOUDXR_JS_SAMPLES_DIR!\react"
+)
+
+REM Drop any location recorded by a previous build so run.bat never follows a stale
+REM path (e.g. after --without-cloudxrjs); :setup_cloudxr_js rewrites it on success.
+del /q "%CLOUDXR_DIR%\samples-dir.txt" 2>nul
 
 echo ========================================
 echo CloudXR LOVR Build Script
@@ -494,6 +541,10 @@ goto :skip_helper_functions
     exit /b 0
 
 :setup_cloudxr_js
+    REM Set up the CloudXR.js React sample: clone (or sync to latest main) the samples
+    REM repo, or use the --samples-repo clone as-is, then install the local CloudXR.js
+    REM package and dependencies, build it, and record its location for run.bat.
+    REM Returns non-zero on any failure.
     echo.
     echo Setting up CloudXR.js local development sample...
 
@@ -504,34 +555,51 @@ goto :skip_helper_functions
     call :check_node_version
     if errorlevel 1 exit /b 1
 
-    if not exist "%CLOUDXR_JS_SAMPLE_DIR%\package.json" (
-        if exist "%CLOUDXR_JS_SAMPLES_DIR%" (
-            echo ERROR: %CLOUDXR_JS_SAMPLES_DIR% exists but the React sample was not found
-            echo Remove it and rerun: rmdir /s /q "%CLOUDXR_JS_SAMPLES_DIR%" ^&^& build.bat
-            exit /b 1
-        )
-
+    if defined SAMPLES_REPO_OVERRIDE (
+        REM User-provided clone: use exactly what is checked out, no fetch/reset.
+        echo Using provided CloudXR.js samples as-is (no sync^): %CLOUDXR_JS_SAMPLES_DIR%
+    ) else if not exist "%CLOUDXR_JS_SAMPLES_DIR%" (
         echo Cloning CloudXR.js samples...
-        git clone --depth 1 "%CLOUDXR_JS_SAMPLES_REPO%" "%CLOUDXR_JS_SAMPLES_DIR%"
+        git clone --depth 1 --branch "%CLOUDXR_JS_SAMPLES_BRANCH%" "%CLOUDXR_JS_SAMPLES_REPO%" "%CLOUDXR_JS_SAMPLES_DIR%"
         if errorlevel 1 (
             echo ERROR: Failed to clone CloudXR.js samples
             if exist "%CLOUDXR_JS_SAMPLES_DIR%" rmdir /s /q "%CLOUDXR_JS_SAMPLES_DIR%"
             exit /b 1
         )
     ) else (
-        echo Using existing CloudXR.js samples in %CLOUDXR_JS_SAMPLES_DIR%
+        REM Existing managed clone: never assume it is current. Forced checkout
+        REM discards tracked edits left by a previous npm install (which would
+        REM otherwise abort a plain checkout if upstream touched the same file^);
+        REM safe because the build owns this directory.
+        echo Syncing CloudXR.js samples to latest %CLOUDXR_JS_SAMPLES_BRANCH%...
+        pushd "%CLOUDXR_JS_SAMPLES_DIR%"
+        git fetch --depth 1 origin "%CLOUDXR_JS_SAMPLES_BRANCH%" && git checkout -q -f -B "%CLOUDXR_JS_SAMPLES_BRANCH%" FETCH_HEAD
+        if errorlevel 1 (
+            popd
+            echo ERROR: Failed to sync %CLOUDXR_JS_SAMPLES_DIR% to %CLOUDXR_JS_SAMPLES_BRANCH%
+            echo Remove it and rerun: rmdir /s /q "%CLOUDXR_JS_SAMPLES_DIR%" ^&^& build.bat
+            exit /b 1
+        )
+        popd
+    )
+
+    REM The React sample must exist after the clone/sync.
+    if not exist "%CLOUDXR_JS_SAMPLE_DIR%\package.json" (
+        echo ERROR: React sample not found in %CLOUDXR_JS_SAMPLES_DIR%
+        exit /b 1
     )
 
     echo CloudXR.js React sample directory: %CLOUDXR_JS_SAMPLE_DIR%
     echo Installing CloudXR.js package from !CLOUDXR_JS_PACKAGE!...
-    for %%A in ("!CLOUDXR_JS_PACKAGE!") do set "CLOUDXR_JS_PACKAGE_FILE=%%~nxA"
+    REM Absolute path: the samples dir may live anywhere, not next to the package.
+    for %%A in ("!CLOUDXR_JS_PACKAGE!") do set "CLOUDXR_JS_PACKAGE_FILE=%%~fA"
     pushd "%CLOUDXR_JS_SAMPLE_DIR%"
     REM npm is npm.cmd on Windows; invoking a batch file from this batch
     REM file without `call` clobbers our instruction pointer, so subsequent
     REM label lookups (e.g. returning from :setup_cloudxr_js) fail with
     REM "The system cannot find the batch label specified". Always use
     REM `call npm ...` here.
-    call npm --registry https://registry.npmjs.org/ install "..\..\!CLOUDXR_JS_PACKAGE_FILE!"
+    call npm --registry https://registry.npmjs.org/ install "!CLOUDXR_JS_PACKAGE_FILE!"
     if errorlevel 1 (
         popd
         echo ERROR: CloudXR.js package install failed
@@ -554,6 +622,9 @@ goto :skip_helper_functions
         exit /b 1
     )
     popd
+
+    REM Tell run.bat where the sample lives (it may be a user-provided clone).
+    >"%CLOUDXR_DIR%\samples-dir.txt" echo !CLOUDXR_JS_SAMPLE_DIR!
 
     echo CloudXR.js setup complete
     exit /b 0

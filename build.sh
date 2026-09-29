@@ -10,6 +10,7 @@
 #   ./build.sh Release               Release build
 #   ./build.sh --without-cloudxrjs   Skip CloudXR.js setup
 #   ./build.sh --clean               Wipe build/ outputs (keep cached archives)
+#   ./build.sh --samples-repo <dir>  Use an existing cloudxr-js-samples clone as-is (no sync)
 #
 # Custom LÖVR source (default: pinned commit on github.com/bjornbytes/lovr):
 #   ./build.sh --lovr-branch <branch>
@@ -52,6 +53,10 @@ DEFAULT_CLOUDXR_JS_URL="https://api.ngc.nvidia.com/v2/resources/org/nvidia/cloud
 CLOUDXR_JS_SAMPLES_REPO="https://github.com/NVIDIA/cloudxr-js-samples.git"
 CLOUDXR_JS_SAMPLES_DIR="${CLOUDXR_DIR}/cloudxr-js-samples"
 CLOUDXR_JS_SAMPLE_DIR="${CLOUDXR_JS_SAMPLES_DIR}/react"
+# Branch the build-managed samples clone is synced to on every build.
+CLOUDXR_JS_SAMPLES_BRANCH="main"
+# Set by --samples-repo: user-provided clone that is used as-is (never synced).
+SAMPLES_REPO_OVERRIDE=""
 MIN_NODE_VERSION="20.19.0"
 CLOUDXR_SDK_DIR=""
 CLOUDXR_SDK_INCLUDE_DIR=""
@@ -131,6 +136,16 @@ while [[ $# -gt 0 ]]; do
             LOVR_BRANCH=""
             shift
             ;;
+        --samples-repo)
+            require_option_value "$1" "${2-}"
+            SAMPLES_REPO_OVERRIDE="$2"
+            shift 2
+            ;;
+        --samples-repo=*)
+            SAMPLES_REPO_OVERRIDE="${1#*=}"
+            require_option_value "--samples-repo" "$SAMPLES_REPO_OVERRIDE"
+            shift
+            ;;
         --without-cloudxrjs)
             WITH_CLOUDXRJS=0
             shift
@@ -146,6 +161,21 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Point the build at a user-provided samples clone. Resolve to an absolute path
+# because setup_cloudxr_js cd's into the sample directory.
+if [ -n "$SAMPLES_REPO_OVERRIDE" ]; then
+    if [ ! -f "$SAMPLES_REPO_OVERRIDE/react/package.json" ]; then
+        echo -e "${RED}❌ --samples-repo ${SAMPLES_REPO_OVERRIDE} does not contain react/package.json${NC}"
+        exit 1
+    fi
+    CLOUDXR_JS_SAMPLES_DIR="$(cd "$SAMPLES_REPO_OVERRIDE" && pwd)"
+    CLOUDXR_JS_SAMPLE_DIR="${CLOUDXR_JS_SAMPLES_DIR}/react"
+fi
+
+# Drop any location recorded by a previous build so run.sh never follows a stale
+# path (e.g. after --without-cloudxrjs); setup_cloudxr_js rewrites it on success.
+rm -f "$CLOUDXR_DIR/samples-dir.txt"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}CloudXR LOVR Build Script${NC}"
@@ -543,6 +573,10 @@ cloudxr_js_npm_install() {
     (cd "$CLOUDXR_JS_SAMPLE_DIR" && npm --registry https://registry.npmjs.org/ install "$@")
 }
 
+# Set up the CloudXR.js React sample: clone (or sync to latest main) the samples
+# repo, or use the --samples-repo clone as-is, then install the local CloudXR.js
+# package and dependencies, build it, and record its location for run.sh.
+# Returns non-zero on any failure.
 setup_cloudxr_js() {
     echo -e "\n${BLUE}Setting up CloudXR.js local development sample...${NC}"
 
@@ -553,26 +587,43 @@ setup_cloudxr_js() {
     if ! check_node_version; then
         return 1
     fi
-    if [ ! -f "$CLOUDXR_JS_SAMPLE_DIR/package.json" ]; then
-        if [ -d "$CLOUDXR_JS_SAMPLES_DIR" ]; then
-            echo -e "${RED}❌ ${CLOUDXR_JS_SAMPLES_DIR} exists but the React sample was not found${NC}"
-            echo -e "${YELLOW}Remove it and rerun: rm -rf \"$CLOUDXR_JS_SAMPLES_DIR\" && ./build.sh${NC}"
-            return 1
-        fi
-
+    if [ -n "$SAMPLES_REPO_OVERRIDE" ]; then
+        # User-provided clone: use exactly what is checked out, no fetch/reset.
+        echo -e "${GREEN}✓ Using provided CloudXR.js samples as-is (no sync): ${CLOUDXR_JS_SAMPLES_DIR}${NC}"
+    elif [ ! -d "$CLOUDXR_JS_SAMPLES_DIR" ]; then
         echo -e "${YELLOW}Cloning CloudXR.js samples...${NC}"
-        if ! git clone --depth 1 "$CLOUDXR_JS_SAMPLES_REPO" "$CLOUDXR_JS_SAMPLES_DIR"; then
+        if ! git clone --depth 1 --branch "$CLOUDXR_JS_SAMPLES_BRANCH" "$CLOUDXR_JS_SAMPLES_REPO" "$CLOUDXR_JS_SAMPLES_DIR"; then
             echo -e "${RED}❌ Failed to clone CloudXR.js samples${NC}"
             rm -rf "$CLOUDXR_JS_SAMPLES_DIR"
             return 1
         fi
     else
-        echo -e "${GREEN}✓ Using existing CloudXR.js samples in ${CLOUDXR_JS_SAMPLES_DIR}${NC}"
+        # Existing managed clone: never assume it is current. Forced checkout
+        # discards tracked edits left by a previous npm install (which would
+        # otherwise abort a plain checkout if upstream touched the same file);
+        # safe because the build owns this directory.
+        echo -e "${YELLOW}Syncing CloudXR.js samples to latest ${CLOUDXR_JS_SAMPLES_BRANCH}...${NC}"
+        if ! ( cd "$CLOUDXR_JS_SAMPLES_DIR" \
+                && git fetch --depth 1 origin "$CLOUDXR_JS_SAMPLES_BRANCH" \
+                && git checkout -q -f -B "$CLOUDXR_JS_SAMPLES_BRANCH" FETCH_HEAD ); then
+            echo -e "${RED}❌ Failed to sync ${CLOUDXR_JS_SAMPLES_DIR} to ${CLOUDXR_JS_SAMPLES_BRANCH}${NC}"
+            echo -e "${YELLOW}Remove it and rerun: rm -rf \"$CLOUDXR_JS_SAMPLES_DIR\" && ./build.sh${NC}"
+            return 1
+        fi
+    fi
+
+    # The React sample must exist after the clone/sync.
+    if [ ! -f "$CLOUDXR_JS_SAMPLE_DIR/package.json" ]; then
+        echo -e "${RED}❌ React sample not found in ${CLOUDXR_JS_SAMPLES_DIR}${NC}"
+        return 1
     fi
 
     echo -e "${GREEN}✓ CloudXR.js React sample directory: ${CLOUDXR_JS_SAMPLE_DIR}${NC}"
     echo -e "${YELLOW}Installing CloudXR.js package from ${CLOUDXR_JS_PACKAGE}...${NC}"
-    if ! cloudxr_js_npm_install "../../$(basename "$CLOUDXR_JS_PACKAGE")"; then
+    # Absolute path: the samples dir may live anywhere, not next to the package.
+    local package_abs
+    package_abs="$(cd "$(dirname "$CLOUDXR_JS_PACKAGE")" && pwd)/$(basename "$CLOUDXR_JS_PACKAGE")"
+    if ! cloudxr_js_npm_install "$package_abs"; then
         echo -e "${RED}❌ CloudXR.js package install failed${NC}"
         return 1
     fi
@@ -588,6 +639,9 @@ setup_cloudxr_js() {
         echo -e "${RED}❌ CloudXR.js sample build failed${NC}"
         return 1
     fi
+
+    # Tell run.sh where the sample lives (it may be a user-provided clone).
+    echo "$CLOUDXR_JS_SAMPLE_DIR" > "$CLOUDXR_DIR/samples-dir.txt"
 
     echo -e "${GREEN}✓ CloudXR.js setup complete${NC}"
 }

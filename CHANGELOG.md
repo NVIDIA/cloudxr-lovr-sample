@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+### Added
+
+- `--samples-repo <dir>` for `build.sh` / `build.bat`: use a previously cloned `cloudxr-js-samples` repo as-is, without syncing.
+
+### Changed
+
+- An existing `build/cloudxr/cloudxr-js-samples` clone is now fetched and force-checked-out to the latest `main` on every build instead of being assumed current.
+
 ## 1.2.0
 
 ### Added

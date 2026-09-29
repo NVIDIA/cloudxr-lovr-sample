@@ -81,6 +81,10 @@ if [ -n "$CERT_PATH" ] || [ -n "$KEY_PATH" ]; then
 fi
 
 CLOUDXR_JS_SAMPLE_DIR="build/cloudxr/cloudxr-js-samples/react"
+# build.sh records the sample location when it was built with --samples-repo.
+if [ -s build/cloudxr/samples-dir.txt ]; then
+    CLOUDXR_JS_SAMPLE_DIR="$(cat build/cloudxr/samples-dir.txt)"
+fi
 CLOUDXR_JS_DEV_SERVER_LOG="build/cloudxr/cloudxr-js-dev-server.log"
 CLOUDXR_JS_DEV_SERVER_PORT=8080
 CLOUDXR_JS_DEV_SERVER_PID=""

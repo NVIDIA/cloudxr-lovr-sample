@@ -87,6 +87,8 @@ if defined CERT_PATH (
 )
 
 set "CLOUDXR_JS_SAMPLE_DIR=%CD%\build\cloudxr\cloudxr-js-samples\react"
+REM build.bat records the sample location when it was built with --samples-repo.
+if exist "build\cloudxr\samples-dir.txt" set /p CLOUDXR_JS_SAMPLE_DIR=<"build\cloudxr\samples-dir.txt"
 
 REM Check if build\src exists
 if not exist "build\src" (

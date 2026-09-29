@@ -25,18 +25,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
-COPY plugins ./plugins
-# SDK root = CLOUDXR_LIB_PATH (libs + plugins/), matching build.sh.
-ADD build/cloudxr/${CXR_SDK_ARCHIVE} /sdk/
 
 RUN git init src \
     && git -C src remote add origin https://github.com/bjornbytes/lovr.git \
     && git -C src fetch --depth 1 origin ${LOVR_COMMIT} \
     && git -C src checkout FETCH_HEAD \
-    && git -C src submodule update --init --recursive --depth 1 \
-    && ln -sfn /work/plugins/nvidia src/plugins/nvidia
+    && git -C src submodule update --init --recursive --depth 1
 
-RUN cmake -B build -S src -G Ninja \
+COPY plugins ./plugins
+# SDK root = CLOUDXR_LIB_PATH (libs + plugins/), matching build.sh.
+ADD build/cloudxr/${CXR_SDK_ARCHIVE} /sdk/
+
+RUN ln -sfn /work/plugins/nvidia src/plugins/nvidia \
+    && cmake -B build -S src -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_ENABLE_EXPORTS=ON \
         -DLOVR_BUILD_WITH_SYMBOLS=ON \

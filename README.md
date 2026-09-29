@@ -248,6 +248,7 @@ Options:
   --lovr-repo <url>                       Custom LOVR repository (also: --lovr-repo=<url>)
   --lovr-branch <branch>                  Use a branch or tag (clears pinned commit)
   --lovr-commit <hash>                    Use a specific commit (clears branch)
+  --samples-repo <dir>                    Use a previously cloned cloudxr-js-samples repo as-is, without syncing (also: --samples-repo=<dir>)
   --without-cloudxrjs                     Skip CloudXR.js sample setup (default is enabled)
   Debug|Release|RelWithDebInfo|MinSizeRel Build type (default: Debug)
   --clean                                 Wipe build outputs; keep cached CloudXR archives in build/cloudxr/
@@ -347,7 +348,7 @@ Internally, `--headless` causes `conf.lua` to leave `t.window = nil` (suppressin
 
 CloudXR.js enables streaming this server to web-based headset clients (Meta Quest 2/3/3S, PICO 4 Ultra) over WebRTC. See the [CloudXR.js documentation](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/index.html) and [client setup guide](https://docs.nvidia.com/cloudxr-sdk/latest/usr_guide/cloudxr_js/client_setup.html) for full details.
 
-**Build behaviour.** By default `./build.sh` / `build.bat` downloads or reuses `build/cloudxr/nvidia-cloudxr-*.tgz`, checks for Node.js v20.19.0+, clones the samples repo to `build/cloudxr/cloudxr-js-samples/`, installs the local CloudXR.js package into the React sample, installs sample dependencies, and runs `npm run build`. Pass `--without-cloudxrjs` to skip all of that. The npm install uses the public registry so stale user-level private registry credentials don't break setup.
+**Build behaviour.** By default `./build.sh` / `build.bat` downloads or reuses `build/cloudxr/nvidia-cloudxr-*.tgz`, checks for Node.js v20.19.0+, clones the samples repo to `build/cloudxr/cloudxr-js-samples/` (or, if that clone already exists, fetches and hard-resets it to the latest `main` on every build), installs the local CloudXR.js package into the React sample, installs sample dependencies, and runs `npm run build`. Pass `--samples-repo <dir>` to use your own previously cloned samples repo exactly as checked out (no fetch/reset; it must contain `react/package.json`, and the build still runs `npm install` and `npm run build` in it). `run.sh`/`run.bat` then start the dev server from that directory. Pass `--without-cloudxrjs` to skip all of that. The npm install uses the public registry so stale user-level private registry credentials don't break setup.
 
 **Run behaviour.** When `run.sh`/`run.bat` is invoked with `--device-profile=auto-webrtc`, it starts `npm run dev-server` from `build/cloudxr/cloudxr-js-samples/react` before launching LÖVR.
 
