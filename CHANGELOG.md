@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+
+- `--mic-demo` for verifying upstream headset microphone audio on Windows through the explicitly selected NVIDIA CloudXR recording endpoint.
+- A compact, amplitude-colored microphone level meter, with clear setup and unavailable-capture states.
+
+### Documentation
+
+- Microphone verification prerequisites and speech/silence plus client mute/unmute checks.
+- A PowerShell-safe Windows launch command for an external HTTPS CloudXR.js client.
+
+### Known Issues
+
+- Direct PowerShell invocation of `run.bat` can split a `--device-profile=<profile>` argument. Use the documented `cmd.exe /c` command to preserve it. With the tested Windows CloudXR 6.3.0 runtime, cleanup after an invalid profile can block while unloading the runtime DLL; that runtime issue remains unresolved.
+
 ## 1.3.0
 
 ### Added

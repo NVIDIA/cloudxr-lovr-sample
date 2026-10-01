@@ -13,6 +13,13 @@ local CloudXRManager = {}
 -- Global variables to store the CloudXR plugin and received data
 local nv_cxr = nil              -- Reference to the loaded CloudXR plugin
 local lastReceivedData = nil    -- Cache of the most recent data received from headset
+-- Preserve pre-start microphone configuration failures for the meter once the headset is ready.
+local micSetupError = nil
+
+function CloudXRManager.getMicSetupError()
+    return micSetupError
+end
+
 local waitingForClientConnection = false
 local clientConnectionReady = false
 
@@ -107,6 +114,29 @@ function CloudXRManager.initRuntime(args)
     -- Enable audio streaming to the headset
     if not nv_cxr.setRuntimeBooleanProperty("audio-streaming", true) then
         print("Failed to set enable_audio property")
+        if args and args["mic-demo"] then
+            micSetupError = "Runtime could not enable audio-streaming required for microphone capture."
+        end
+    end
+
+    if args and args["mic-demo"] and not micSetupError then
+        local micEnv = os.getenv("NV_MIC_STREAMING") or ""
+        local audioEnv = os.getenv("NV_AUDIO_ENABLED") or ""
+        local function disabled(value)
+            -- Match the runtime's debug_string_to_bool false spellings exactly.
+            local values = {
+                ["0"] = true, ["false"] = true, ["FALSE"] = true,
+                ["off"] = true, ["OFF"] = true, ["no"] = true, ["NO"] = true,
+                ["n"] = true, ["N"] = true, ["f"] = true, ["F"] = true
+            }
+            return values[value] == true
+        end
+        if disabled(micEnv) or disabled(audioEnv) then
+            micSetupError = "NV_MIC_STREAMING/NV_AUDIO_ENABLED explicitly disables audio; unset it or enable it."
+        elseif not nv_cxr.setRuntimeBooleanProperty("mic-streaming", true) then
+            micSetupError = "Runtime does not support enabling mic-streaming; use a microphone-capable CloudXR runtime."
+        end
+        if micSetupError then print("Microphone upstream: " .. micSetupError) end
     end
 
     -- Native TLS: when both env vars are set, the runtime terminates wss://

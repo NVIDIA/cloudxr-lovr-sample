@@ -63,6 +63,7 @@ local CloudXRManager = require('cloudxr_manager')  -- Manages CloudXR runtime an
 local HeadsetManager = require('headset_manager')  -- Manages OpenXR headset initialization
 local Renderer = require('renderer')               -- Handles rendering of VR content and data
 local AudioManager = require('audio_manager')      -- Manages audio playback triggered by hand gestures
+local MicrophoneManager = require('microphone_manager') -- Optional upstream verification
 -- Mutually-exclusive lifecycle states. Transitions live in lovr.load,
 -- initializeHeadsetStack, and lovr.update.
 local STATE = {
@@ -282,6 +283,7 @@ local function printUsage()
     print("Usage: lovr plugins/nvidia/examples/cloudxr [options]")
     print("  --device-profile=<profile>  CloudXR device profile (default: apple-vision-pro)")
     print("  --use_system_runtime        Do not start the bundled CloudXR runtime")
+    print("  --mic-demo                  Show upstream microphone meter (Windows virtual audio driver required)")
 end
 
 local function parseArgs(rawArgs)
@@ -354,6 +356,10 @@ local function initializeHeadsetStack()
         -- Continue anyway, audio is not critical
     end
 
+    -- Start capture only once the client/headset stack is ready, so waiting for
+    -- an auto-profile client does not consume the recording-device timeout.
+    MicrophoneManager.init(AppState.micArgs, AppState.micSetupError)
+
     AppState.state = STATE.INITIALIZED
     print("Application initialized successfully")
     return true
@@ -406,6 +412,12 @@ function lovr.load(args)
         print("Skipping CloudXR Runtime initialization (--use_system_runtime flag detected)")
     end
     
+    AppState.micArgs = parsedArgs
+    AppState.micSetupError = CloudXRManager.getMicSetupError()
+    if parsedArgs.use_system_runtime then
+        AppState.micSetupError = "Microphone verification requires the CloudXR runtime."
+    end
+
     AppState.useSystemRuntime = parsedArgs.use_system_runtime == true
 
     if CloudXRManager.isWaitingForClientConnection() and not parsedArgs.use_system_runtime then
@@ -432,6 +444,7 @@ end
 -- Clean up resources in reverse order of initialization
 function lovr.quit()
     print("Cleaning up application...")
+    MicrophoneManager.cleanup()
     
     -- Clean up audio manager
     if AudioManager then
@@ -455,6 +468,8 @@ function lovr.draw(pass)
     if AppState.state ~= STATE.INITIALIZED then
         return
     end
+
+    MicrophoneManager.draw(pass)
 
     local lastReceivedData = nil
     
@@ -482,6 +497,8 @@ end
 -- LÖVR update function - called every frame for game logic and updates
 -- This is where we handle input, update state, and process opaque data
 function lovr.update(dt)
+    -- Drain capture even when an initialized headset becomes inactive.
+    MicrophoneManager.update(dt)
     -- Check for Enter key press to exit the application
     if lovr.system and lovr.system.isKeyDown('return') then
         print("Enter key pressed - exiting application")

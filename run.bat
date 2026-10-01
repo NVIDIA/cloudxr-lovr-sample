@@ -11,6 +11,7 @@ REM   run.bat "--device-profile=auto-webrtc" via CloudXR.js (quote the arg)
 REM   run.bat --without-cloudxrjs            Skip the local CloudXR.js dev
 REM                                          server (use your own server)
 REM   run.bat --cert <pem> --key <pem>       Enable native TLS (wss://)
+REM   run.bat --mic-demo                       Optional upstream microphone meter (Windows)
 REM These flags are consumed here; anything else is forwarded to LOVR unchanged.
 REM =============================================================================
 

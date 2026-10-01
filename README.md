@@ -91,6 +91,64 @@ If the headset doesn't connect, jump to [Troubleshooting](#troubleshooting).
 
 ---
 
+### Verify Upstream Microphone Audio (Windows)
+
+Run the optional server-side microphone meter:
+
+```powershell
+.\run.bat --mic-demo
+# Quest / CloudXR.js:
+cmd.exe /c 'run.bat "--device-profile=auto-webrtc" --mic-demo --without-cloudxrjs'
+```
+
+Use a CloudXR Runtime that supports the `mic-streaming` property, with the CloudXR
+Virtual Audio Driver installed **before runtime startup**. The sample enables
+`mic-streaming` and keeps `audio-streaming` enabled in this mode. Grant the headset
+client's OS/browser microphone permission and enable its Mic option. For
+CloudXR.js, serve the client page over HTTPS so the browser can grant microphone
+access. The Quest command above uses an external HTTPS client server;
+`--without-cloudxrjs` skips the launcher's local development server. Native
+signaling TLS configuration is documented separately below.
+
+From PowerShell, use the `cmd.exe /c` form above: directly invoking `run.bat` can
+split the profile argument despite quotes. An invalid profile can also trigger a
+runtime DLL unload hang with the tested Windows CloudXR 6.3.0 runtime. The command
+avoids the malformed argument; the underlying runtime cleanup issue is unresolved.
+
+Explicitly disabled `NV_MIC_STREAMING` or `NV_AUDIO_ENABLED` environment settings produce a
+setup error; unset them or enable them before launching.
+
+The compact **Microphone upstream** panel shows the selected recording device and
+a level meter in the lower right. Long device names are shortened on the panel;
+the full name is printed when capture opens. The meter changes from green through
+yellow to red as sound amplitude increases on a -60 to 0 dBFS scale. Setup errors
+or unavailable capture appear in place of the meter. It opens only a recording
+device whose name contains both `NVIDIA` and `CloudXR`; it never falls back to the
+PC microphone. A renamed or missing endpoint, multiple matching devices, capture
+permission failure or unsupported runtime produces an explicit setup error.
+Disable unused matching endpoints and restart if selection is ambiguous. The
+device can appear during startup; the meter waits up to 10 seconds before reporting
+it missing. Driver naming follows the shipped CloudXR driver description
+`NVIDIA CloudXR` and its microphone endpoint.
+
+To verify upstream delivery, speak into the headset microphone, pause, and confirm
+the meter responds to speech and returns toward its quiet baseline. While speaking,
+mute the client: after buffered audio drains the meter should stop responding.
+Unmute and confirm speech response returns without disrupting streaming. A client
+mic icon or capture activity alone cannot establish success:
+virtual-device silence also produces capture frames. The meter starts at -60 dBFS,
+a display floor rather than a required pass threshold; **No capture data** means
+no fresh buffered samples were available that update. An empty meter or absent
+capture alone cannot identify client mute, disconnection or denied permission.
+
+This verifies signal delivery to the server application, not intelligibility,
+audio quality or a latency limit. No microphone audio is saved or echoed back.
+Normal sample behavior is unchanged without `--mic-demo`. Linux currently lacks
+the CloudXR recording endpoint, and the mode reports that Windows is required.
+
+After editing sample Lua files, restart the sample; the launcher uses the Lua
+example directly from `plugins/nvidia/examples/cloudxr`.
+
 ## How It Works
 
 ### Architecture

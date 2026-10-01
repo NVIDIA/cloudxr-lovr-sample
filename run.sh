@@ -11,6 +11,7 @@
 #   ./run.sh --without-cloudxrjs            Skip the local CloudXR.js dev
 #                                           server (use your own server)
 #   ./run.sh --cert <pem> --key <pem>       Enable native TLS (wss://)
+#   ./run.sh --mic-demo                       Optional upstream microphone meter (Windows)
 # These flags are consumed here; anything else is forwarded to LÖVR unchanged.
 # =============================================================================
 
