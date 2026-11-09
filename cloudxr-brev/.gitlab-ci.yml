@@ -1,0 +1,103 @@
+include:
+  - project: "cloudxr/utilities/ci-templates"
+    file:
+      - "shared/runners.yml"
+    ref: "main"
+
+stages:
+  - validate
+  - package
+  - publish
+
+variables:
+  LAUNCHER_PACKAGE_NAME: "cloudxr-experiences"
+
+validate-launcher:
+  stage: validate
+  extends: .runner-linux-x86_64
+  image: python:3.12-bookworm
+  script:
+    - bash -n src/launcher.sh
+    - python3 -m unittest discover -s tests -v
+  rules:
+    - if: "$CI_COMMIT_TAG"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH"
+
+# Set this variable to a published GitHub commit containing cloudxr-brev/.
+# Ordinary validation does not require publication or access to GitHub.
+package-launcher:
+  stage: package
+  extends: .runner-linux-x86_64
+  image: python:3.12-bookworm
+  needs: [validate-launcher]
+  script:
+    - python3 scripts/build_launch.py --revision "$CLOUDXR_LAUNCHER_REVISION"
+    - bash -n launch.sh
+  artifacts:
+    name: "cloudxr-experiences-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - launch.sh
+      - launch.sh.sha256
+    expire_in: 1 week
+  rules:
+    - if: '$CLOUDXR_LAUNCHER_REVISION && $CI_COMMIT_TAG'
+    - if: '$CLOUDXR_LAUNCHER_REVISION && $CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CLOUDXR_LAUNCHER_REVISION && $CI_COMMIT_BRANCH'
+
+publish-launcher:
+  stage: publish
+  extends: .runner-linux-x86_64
+  image: python:3.12-bookworm
+  needs:
+    - job: package-launcher
+      artifacts: true
+  script:
+    - |
+      if [[ -n "${CI_COMMIT_TAG:-}" ]]; then
+        PACKAGE_VERSION="$CI_COMMIT_TAG"
+      elif [[ -n "${CI_MERGE_REQUEST_IID:-}" ]]; then
+        PACKAGE_VERSION="mr-$CI_MERGE_REQUEST_IID-$CI_COMMIT_SHORT_SHA"
+      else
+        PACKAGE_VERSION="main-$CI_COMMIT_SHORT_SHA"
+      fi
+      PACKAGE_FILE="launch.sh"
+      sha256sum "$PACKAGE_FILE" > "$PACKAGE_FILE.sha256"
+      PACKAGE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${LAUNCHER_PACKAGE_NAME}/${PACKAGE_VERSION}"
+      for file in "$PACKAGE_FILE" "$PACKAGE_FILE.sha256"; do
+        url="$PACKAGE_URL/$file"
+        status="$(curl --silent --show-error --location --header "JOB-TOKEN: $CI_JOB_TOKEN" --output "$file.remote" --write-out "%{http_code}" "$url")"
+        if [[ "$status" == "200" ]]; then
+          cmp "$file" "$file.remote" || { echo "Package collision at $url" >&2; exit 1; }
+          echo "Already published: $url"
+        elif [[ "$status" == "404" ]]; then
+          curl --location --fail-with-body --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$file" "$url"
+        else
+          echo "Package lookup failed with HTTP $status: $url" >&2; exit 1
+        fi
+        rm -f "$file.remote"
+      done
+  artifacts:
+    paths:
+      - "launch*.sh"
+      - "launch*.sha256"
+    expire_in: 1 week
+  rules:
+    - if: '$CLOUDXR_LAUNCHER_REVISION && $CI_COMMIT_TAG'
+    - if: '$CLOUDXR_LAUNCHER_REVISION && $CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CLOUDXR_LAUNCHER_REVISION && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+pages:
+  stage: publish
+  extends: .runner-linux-x86_64
+  image: python:3.12-bookworm
+  script:
+    - python3 scripts/build_preview.py public/index.html
+  artifacts:
+    paths:
+      - public
+  environment:
+    name: ui-preview
+    url: $CI_PAGES_URL
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'

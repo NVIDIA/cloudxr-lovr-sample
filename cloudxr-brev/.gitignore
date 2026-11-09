@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+/launch.sh
+/public/
+
+/launch.sh.sha256
+.DS_Store
